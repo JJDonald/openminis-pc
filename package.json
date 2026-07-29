@@ -1,0 +1,36 @@
+{
+  "name": "openminis-pc",
+  "version": "1.0.0",
+  "description": "OpenMinis PC Client - Your private, on-device AI agent",
+  "main": "electron-entry.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/main/server.js",
+    "electron": "npm run build && electron .",
+    "dev": "tsc && node dist/main/server.js"
+  },
+  "build": {
+    "appId": "app.openminis.desktop",
+    "productName": "OpenMinis",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/renderer/**/*",
+      "electron-entry.js",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "sharp": "^0.35.3",
+    "typescript": "^5.5.0"
+  }
+}

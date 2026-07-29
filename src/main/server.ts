@@ -1,0 +1,608 @@
+// =============================================================================
+// OpenMinis PC - HTTP Server (multi-model profiles)
+// =============================================================================
+
+import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
+import { URL } from 'url';
+import { AgentLoop, AgentLoopConfig } from './agent/AgentLoop';
+import { ProviderFactory } from './providers/ProviderFactory';
+import { makeAgentTools } from './tools/ToolDefinitions';
+import { AgentLoopCallbacks, LLMUsage, ProviderType } from './providers/types';
+
+const PORT = 19840;
+const WORKSPACE_DIR = process.env.OPENMINIS_WORKSPACE || path.join(process.cwd(), 'workspace');
+const MEMORY_DIR = path.join(WORKSPACE_DIR, '.minis-memory');
+const SETTINGS_FILE = path.join(WORKSPACE_DIR, '.minis-settings.json');
+const SESSIONS_FILE = path.join(WORKSPACE_DIR, '.minis-sessions.json');
+const SESSIONS_DIR = path.join(WORKSPACE_DIR, '.minis-sessions');
+const RENDERER_DIR = path.resolve(__dirname, '..', '..', 'src', 'renderer');
+
+fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+fs.mkdirSync(MEMORY_DIR, { recursive: true });
+fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+// ---- Profile Types ----
+interface ModelProfile {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseURL?: string;
+}
+
+interface AppSettings {
+  profiles: ModelProfile[];
+  activeProfileId: string;
+}
+
+// ---- Settings I/O ----
+function loadSettings(): AppSettings {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+      // Migrate old format
+      if (!raw.profiles && raw.provider) {
+        return {
+          profiles: [{
+            id: 'default',
+            name: 'Default',
+            provider: raw.provider || 'anthropic',
+            model: raw.model || 'claude-sonnet-4-20250514',
+            apiKey: raw.apiKey || '',
+            baseURL: raw.baseURL || '',
+          }],
+          activeProfileId: 'default',
+        };
+      }
+      return {
+        profiles: raw.profiles || [],
+        activeProfileId: raw.activeProfileId || raw.profiles?.[0]?.id || '',
+      };
+    }
+  } catch { /* ignore */ }
+  return { profiles: [], activeProfileId: '' };
+}
+
+function saveSettings(s: AppSettings): void {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2), 'utf-8');
+}
+
+function activeProfile(): ModelProfile | null {
+  const s = loadSettings();
+  return s.profiles.find(p => p.id === s.activeProfileId) || s.profiles[0] || null;
+}
+
+function maskKey(key: string): string {
+  if (!key || key.length < 12) return key ? '***' : '';
+  return key.substring(0, 8) + '...' + key.substring(key.length - 4);
+}
+
+// ---- Session Types ----
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls?: { id: string; name: string; args: Record<string, unknown> }[];
+  usage?: { inputTokens: number; outputTokens: number };
+  timestamp: number;
+}
+
+interface Session {
+  id: string;
+  title: string;
+  created: number;
+  updated: number;
+  messageCount: number;
+}
+
+interface SessionStore {
+  sessions: Session[];
+  activeSessionId: string;
+}
+
+// ---- Session I/O ----
+function loadSessionStore(): SessionStore {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+  return { sessions: [], activeSessionId: '' };
+}
+
+function saveSessionStore(s: SessionStore): void {
+  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(s, null, 2), 'utf-8');
+}
+
+function loadMessages(sessionId: string): ChatMessage[] {
+  try {
+    const fp = path.join(SESSIONS_DIR, sessionId + '.json');
+    if (fs.existsSync(fp)) {
+      return JSON.parse(fs.readFileSync(fp, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveMessages(sessionId: string, msgs: ChatMessage[]): void {
+  const fp = path.join(SESSIONS_DIR, sessionId + '.json');
+  fs.writeFileSync(fp, JSON.stringify(msgs, null, 2), 'utf-8');
+}
+
+// ---- AgentLoop Cache (per session) ----
+const agentCache = new Map<string, AgentLoop>();
+
+function getOrCreateAgent(sessionId: string): AgentLoop | null {
+  let agent = agentCache.get(sessionId);
+  if (agent) return agent;
+
+  const profile = activeProfile();
+  if (!profile || !profile.apiKey) return null;
+
+  const provider = ProviderFactory.create({
+    type: profile.provider as ProviderType,
+    name: profile.provider,
+    model: profile.model,
+    apiKey: profile.apiKey,
+    baseURL: profile.baseURL || undefined,
+  });
+
+  const config: AgentLoopConfig = {
+    provider, workspaceDir: WORKSPACE_DIR, memoryDir: MEMORY_DIR,
+    memoryEnabled: true, maxTokens: 64000,
+  };
+  agent = new AgentLoop(config);
+  agentCache.set(sessionId, agent);
+  return agent;
+}
+
+function cancelSessionAgent(sessionId: string): void {
+  const agent = agentCache.get(sessionId);
+  if (agent) {
+    agent.cancel();
+    agentCache.delete(sessionId);
+  }
+}
+
+// Helper: persist chat messages after a turn
+function saveSessionMessages(
+  sessionId: string,
+  existingMessages: ChatMessage[],
+  userMsg: ChatMessage,
+  assistantText: string,
+  toolCalls: { id: string; name: string; args: Record<string, unknown> }[],
+  usage: { inputTokens: number; outputTokens: number } | undefined,
+): void {
+  const assistantMsg: ChatMessage = {
+    role: 'assistant',
+    content: assistantText,
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    usage: usage,
+    timestamp: Date.now(),
+  };
+  const updatedMessages = [...existingMessages, userMsg, assistantMsg];
+
+  // Limit to last 200 messages per session (prevent bloat)
+  const trimmed = updatedMessages.length > 200
+    ? updatedMessages.slice(updatedMessages.length - 200)
+    : updatedMessages;
+
+  saveMessages(sessionId, trimmed);
+
+  // Update session metadata
+  const store = loadSessionStore();
+  const sess = store.sessions.find(s => s.id === sessionId);
+  if (sess) {
+    sess.messageCount = trimmed.length;
+    sess.updated = Date.now();
+    saveSessionStore(store);
+  }
+}
+
+// ---- Agent (per session) ----
+// Agents are now cached per session via getOrCreateAgent()/cancelSessionAgent()
+// See agentCache Map above.
+
+// ---- MIME ----
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
+};
+
+function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
+  let fp = req.url === '/' ? '/index.html' : req.url || '/index.html';
+  fp = path.join(RENDERER_DIR, fp);
+  const ext = path.extname(fp);
+  try {
+    const content = fs.readFileSync(fp);
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.end(content);
+  } catch { res.writeHead(404); res.end('Not found'); }
+}
+
+function sendSSE(res: http.ServerResponse, event: string, data: unknown): void {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function jsonReply(res: http.ServerResponse, code: number, body: unknown): void {
+  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => resolve(body));
+  });
+}
+
+// ---- Create Server ----
+function createServer(): http.Server {
+  return http.createServer(async (req, res) => {
+    const url = new URL(req.url || '/', `http://localhost:${PORT}`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+    // =====================================================================
+    // Search API — fuzzy search across all session messages
+    // =====================================================================
+    if (url.pathname === '/api/search' && req.method === 'GET') {
+      const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+      if (!q) { jsonReply(res, 200, { results: [] }); return; }
+
+      const store = loadSessionStore();
+      const results: { session: Session; matches: { role: string; snippet: string }[] }[] = [];
+
+      for (const sess of store.sessions) {
+        const msgs = loadMessages(sess.id);
+        const matches: { role: string; snippet: string }[] = [];
+        for (const msg of msgs) {
+          const content = msg.content.toLowerCase();
+          if (content.includes(q)) {
+            // Extract snippet around the match
+            const idx = content.indexOf(q);
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(content.length, idx + q.length + 40);
+            let snippet = msg.content.substring(start, end);
+            if (start > 0) snippet = '...' + snippet;
+            if (end < msg.content.length) snippet += '...';
+            matches.push({ role: msg.role, snippet });
+            if (matches.length >= 5) break; // max 5 matches per session
+          }
+        }
+        if (matches.length > 0) {
+          results.push({ session: sess, matches });
+        }
+      }
+
+      jsonReply(res, 200, { results, query: q });
+      return;
+    }
+
+    // =====================================================================
+    // Sessions API (CRUD)
+    // =====================================================================
+    if (url.pathname === '/api/sessions') {
+      if (req.method === 'GET') {
+        const store = loadSessionStore();
+        // Sort newest first
+        store.sessions.sort((a, b) => b.updated - a.updated);
+        jsonReply(res, 200, { sessions: store.sessions, activeSessionId: store.activeSessionId });
+        return;
+      }
+
+      if (req.method === 'POST') {
+        const store = loadSessionStore();
+        const session: Session = {
+          id: 'sess_' + Date.now(),
+          title: 'New Chat',
+          created: Date.now(),
+          updated: Date.now(),
+          messageCount: 0,
+        };
+        store.sessions.push(session);
+        store.activeSessionId = session.id;
+        saveSessionStore(store);
+        saveMessages(session.id, []);
+        jsonReply(res, 200, { session });
+        return;
+      }
+    }
+
+    // GET /api/sessions/:id — load messages
+    // PUT /api/sessions/:id — rename
+    // DELETE /api/sessions/:id — delete
+    if (url.pathname.startsWith('/api/sessions/')) {
+      const sid = url.pathname.split('/').pop() || '';
+
+      if (req.method === 'GET') {
+        const msgs = loadMessages(sid);
+        jsonReply(res, 200, { messages: msgs });
+        return;
+      }
+
+      if (req.method === 'PUT') {
+        const body = await readBody(req);
+        try {
+          const { title } = JSON.parse(body);
+          const store = loadSessionStore();
+          const s = store.sessions.find(s => s.id === sid);
+          if (s) {
+            s.title = title || s.title;
+            s.updated = Date.now();
+            saveSessionStore(store);
+            jsonReply(res, 200, { ok: true });
+          } else {
+            jsonReply(res, 404, { error: 'Session not found' });
+          }
+        } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
+        return;
+      }
+
+      if (req.method === 'DELETE') {
+        cancelSessionAgent(sid);
+        const store = loadSessionStore();
+        store.sessions = store.sessions.filter(s => s.id !== sid);
+        if (store.activeSessionId === sid) {
+          store.activeSessionId = store.sessions[0]?.id || '';
+        }
+        saveSessionStore(store);
+        // Delete message file
+        const fp = path.join(SESSIONS_DIR, sid + '.json');
+        try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch { /* ignore */ }
+        jsonReply(res, 200, { ok: true, activeSessionId: store.activeSessionId });
+        return;
+      }
+    }
+
+    // =====================================================================
+    // Chat API
+    // =====================================================================
+    if (url.pathname === '/api/chat' && req.method === 'POST') {
+      const body = await readBody(req);
+      try {
+        const { message, sessionId } = JSON.parse(body);
+        if (!message) throw new Error('message required');
+        if (!sessionId) throw new Error('sessionId required');
+
+        const profile = activeProfile();
+        if (!profile || !profile.apiKey) {
+          jsonReply(res, 400, { error: 'Please configure at least one AI model in Settings first.' });
+          return;
+        }
+
+        // Cancel existing agent for this session, then create/reuse
+        cancelSessionAgent(sessionId);
+        const agent = getOrCreateAgent(sessionId);
+        if (!agent) {
+          jsonReply(res, 400, { error: 'Failed to create agent.' });
+          return;
+        }
+        await agent.initialize();
+        const tools = makeAgentTools(true);
+
+        // Save user message
+        const userMsg: ChatMessage = { role: 'user', content: message, timestamp: Date.now() };
+        const existingMessages = loadMessages(sessionId);
+
+        // Auto-title: use first user message if title is still "New Chat"
+        const store = loadSessionStore();
+        const sess = store.sessions.find(s => s.id === sessionId);
+        if (sess && sess.title === 'New Chat' && existingMessages.length === 0) {
+          sess.title = message.substring(0, 40) + (message.length > 40 ? '...' : '');
+          sess.updated = Date.now();
+        }
+
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+
+        // Accumulate assistant response for saving
+        let assistantFullText = '';
+        let assistantToolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
+        let lastUsage: { inputTokens: number; outputTokens: number } | undefined;
+
+        const cb: AgentLoopCallbacks = {
+          onTextDelta: (_t, ft) => {
+            assistantFullText = ft;
+            sendSSE(res, 'text', { content: ft });
+          },
+          onThinkingDelta: t => sendSSE(res, 'thinking', { content: t }),
+          onToolCallStart: (id, name) => sendSSE(res, 'tool_start', { id, name }),
+          onToolInputDelta: (name, acc) => sendSSE(res, 'tool_input', { name, args: acc }),
+          onToolCallComplete: (id, name, args) => {
+            assistantToolCalls.push({ id, name, args });
+            sendSSE(res, 'tool_complete', { id, name, args });
+          },
+          onToolResult: (id, r) => sendSSE(res, 'tool_result', { id, output: r.output, success: r.success }),
+          onUsage: (u: LLMUsage) => {
+            lastUsage = { inputTokens: u.inputTokens, outputTokens: u.outputTokens };
+            sendSSE(res, 'usage', u);
+          },
+          onError: (e) => {
+            sendSSE(res, 'error', { message: e });
+            res.end();
+            // Save partial
+            saveSessionMessages(sessionId, existingMessages, userMsg, assistantFullText, assistantToolCalls, lastUsage);
+          },
+          onDone: (sr) => {
+            sendSSE(res, 'done', { stopReason: sr });
+            res.end();
+            saveSessionMessages(sessionId, existingMessages, userMsg, assistantFullText, assistantToolCalls, lastUsage);
+          },
+          onCancelled: () => {
+            sendSSE(res, 'cancelled', {});
+            res.end();
+            saveSessionMessages(sessionId, existingMessages, userMsg, assistantFullText, assistantToolCalls, lastUsage);
+          },
+        };
+        await agent.run(message, tools, cb);
+      } catch (err: unknown) {
+        if (!res.headersSent) jsonReply(res, 500, { error: (err as Error).message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/cancel') {
+      let sessionId = url.searchParams.get('sessionId') || '';
+      if (!sessionId) {
+        // Legacy fallback: try reading body
+        try {
+          const body = await readBody(req);
+          const parsed = JSON.parse(body);
+          sessionId = parsed.sessionId || '';
+        } catch { /* ignore */ }
+      }
+      if (sessionId) {
+        cancelSessionAgent(sessionId);
+      }
+      jsonReply(res, 200, { ok: true });
+      return;
+    }
+
+    // =====================================================================
+    // Profiles API (CRUD)
+    // =====================================================================
+    if (url.pathname === '/api/profiles') {
+      if (req.method === 'GET') {
+        const s = loadSettings();
+        const masked = s.profiles.map(p => ({ ...p, apiKey: maskKey(p.apiKey) }));
+        jsonReply(res, 200, { profiles: masked, activeProfileId: s.activeProfileId });
+        return;
+      }
+
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        try {
+          const profile: ModelProfile = JSON.parse(body);
+          if (!profile.id) profile.id = 'p_' + Date.now();
+          if (!profile.name) profile.name = profile.model || 'Unnamed';
+          const s = loadSettings();
+          const idx = s.profiles.findIndex(p => p.id === profile.id);
+          if (idx >= 0) s.profiles[idx] = profile;
+          else s.profiles.push(profile);
+          if (!s.activeProfileId) s.activeProfileId = profile.id;
+          saveSettings(s);
+          jsonReply(res, 200, { ok: true, profile: { ...profile, apiKey: maskKey(profile.apiKey) } });
+        } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
+        return;
+      }
+
+      if (req.method === 'PUT') {
+        const body = await readBody(req);
+        try {
+          const { activeProfileId } = JSON.parse(body);
+          const s = loadSettings();
+          if (s.profiles.find(p => p.id === activeProfileId)) {
+            s.activeProfileId = activeProfileId;
+            saveSettings(s);
+            jsonReply(res, 200, { ok: true });
+          } else {
+            jsonReply(res, 404, { error: 'Profile not found' });
+          }
+        } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
+        return;
+      }
+    }
+
+    // DELETE /api/profiles/:id
+    if (url.pathname.startsWith('/api/profiles/') && req.method === 'DELETE') {
+      const id = url.pathname.split('/').pop() || '';
+      const s = loadSettings();
+      s.profiles = s.profiles.filter(p => p.id !== id);
+      if (s.activeProfileId === id) s.activeProfileId = s.profiles[0]?.id || '';
+      saveSettings(s);
+      jsonReply(res, 200, { ok: true });
+      return;
+    }
+
+    // =====================================================================
+    // Active profile info
+    // =====================================================================
+    if (url.pathname === '/api/active-profile' && req.method === 'GET') {
+      const p = activeProfile();
+      if (p) {
+        jsonReply(res, 200, { id: p.id, name: p.name, provider: p.provider, model: p.model });
+      } else {
+        jsonReply(res, 200, { id: '', name: 'No model', provider: '', model: '' });
+      }
+      return;
+    }
+
+    // =====================================================================
+    // Legacy compat + reset
+    // =====================================================================
+    if (url.pathname === '/api/settings') {
+      if (req.method === 'GET') {
+        const p = activeProfile();
+        jsonReply(res, 200, {
+          provider: p?.provider || '',
+          model: p?.model || '',
+          apiKey: maskKey(p?.apiKey || ''),
+        });
+        return;
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        try {
+          const d = JSON.parse(body);
+          if (d.provider && d.apiKey) {
+            const profile: ModelProfile = {
+              id: 'default', name: d.model || 'Default',
+              provider: d.provider, model: d.model || '', apiKey: d.apiKey,
+              baseURL: d.baseURL || '',
+            };
+            saveSettings({ profiles: [profile], activeProfileId: 'default' });
+          }
+          jsonReply(res, 200, { ok: true });
+        } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
+        return;
+      }
+    }
+
+    if (url.pathname === '/api/reset') {
+      let sessionId = url.searchParams.get('sessionId') || '';
+      if (sessionId) {
+        cancelSessionAgent(sessionId);
+      }
+      jsonReply(res, 200, { ok: true });
+      return;
+    }
+
+    serveStatic(req, res);
+  });
+}
+
+// ---- Export ----
+export function startServer(port: number = PORT, autoOpen: boolean = true): Promise<http.Server> {
+  return new Promise((resolve) => {
+    const srv = createServer();
+    srv.listen(port, () => {
+      console.log(`OpenMinis server running on http://localhost:${port}`);
+      if (autoOpen) {
+        const { exec } = require('child_process');
+        const cmd = process.platform === 'win32'
+          ? `start http://localhost:${port}`
+          : process.platform === 'darwin'
+            ? `open http://localhost:${port}`
+            : `xdg-open http://localhost:${port}`;
+        exec(cmd);
+      }
+      resolve(srv);
+    });
+  });
+}
+
+const isDirectRun = require.main === module;
+if (isDirectRun) {
+  startServer(PORT, true).then(() => {
+    console.log(`\n╔══════════════════════════════════════════════╗`);
+    console.log(`║          OpenMinis PC Client                 ║`);
+    console.log(`║  Server: http://localhost:${PORT}                 ║`);
+    console.log(`╚══════════════════════════════════════════════╝\n`);
+  });
+}

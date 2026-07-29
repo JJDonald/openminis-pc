@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenMinis PC</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>OpenMinis</h1>
+      <span class="version">PC v1.0</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" data-view="chat">💬 Chat</button>
+      <button class="nav-btn" data-view="settings">⚙️ Models</button>
+      <button class="nav-btn" data-view="about">ℹ️ About</button>
+    </nav>
+    <div class="sidebar-sessions">
+      <div class="sessions-header">
+        <span class="sessions-title">Chats</span>
+        <button class="sessions-new-btn" id="newSessionBtn" title="New Chat">+</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search conversations...">
+        <button class="search-clear" id="searchClear" title="Clear" style="display:none;">×</button>
+      </div>
+      <div class="search-results" id="searchResults" style="display:none;"></div>
+      <div class="sessions-list" id="sessionsList">
+        <div class="sessions-empty">No conversations yet</div>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Ready</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Chat View -->
+    <div class="view active" id="view-chat">
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <div class="welcome">
+            <div class="welcome-icon">🧠</div>
+            <h2>Welcome to OpenMinis PC</h2>
+            <p>Your private, on-device AI agent with a real shell.</p>
+            <div class="quick-actions">
+              <button class="quick-btn" onclick="sendQuick('List files in the current directory')">📂 List files</button>
+              <button class="quick-btn" onclick="sendQuick('What is my operating system and hardware?')">💻 System info</button>
+              <button class="quick-btn" onclick="sendQuick('Create a simple Python web server script')">🐍 Python script</button>
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <div class="model-bar" id="modelBar">
+            <span class="model-bar-label">Model:</span>
+            <select id="modelSelector" class="model-selector">
+              <option value="">— No model configured —</option>
+            </select>
+            <button class="model-bar-refresh" onclick="refreshModelSelector()" title="Refresh">↻</button>
+            <span class="model-bar-hint" id="modelBarHint"></span>
+          </div>
+          <div class="chat-input-wrapper">
+            <textarea id="chatInput" placeholder="Ask Minis anything... (Shift+Enter for new line)" rows="1"></textarea>
+            <div class="input-actions">
+              <button id="sendBtn" title="Send (Enter)">▶</button>
+              <button id="stopBtn" title="Stop" style="display:none;">⏹</button>
+            </div>
+          </div>
+          <div class="input-hint">Enter to send · Shift+Enter for new line · Switch model above ↖</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Models / Settings View -->
+    <div class="view" id="view-settings">
+      <div class="settings-container">
+        <div class="settings-header">
+          <h2>AI Models</h2>
+          <button class="btn-primary btn-sm" onclick="showProfileEditor()">+ Add Model</button>
+        </div>
+        <div class="profile-list" id="profileList">
+          <div class="profile-empty">No models configured yet. Click "+ Add Model" to get started.</div>
+        </div>
+
+        <!-- Profile Editor (hidden, shown as overlay) -->
+        <div class="profile-editor-overlay" id="profileEditorOverlay" style="display:none;">
+          <div class="profile-editor">
+            <h3 id="profileEditorTitle">Add Model</h3>
+            <input type="hidden" id="profileEditorId">
+            <div class="setting-group">
+              <label>Display Name</label>
+              <input type="text" id="profileEditorName" placeholder="e.g. Claude for coding, GPT for writing">
+            </div>
+            <div class="setting-group">
+              <label>Provider</label>
+              <select id="profileEditorProvider">
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="gemini">Google (Gemini)</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="custom">Custom (OpenAI-compatible)</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <label>Model ID</label>
+              <input type="text" id="profileEditorModel" placeholder="claude-sonnet-4-20250514">
+            </div>
+            <div class="setting-group">
+              <label>API Key</label>
+              <input type="password" id="profileEditorApiKey" placeholder="sk-...">
+              <span class="setting-hint">Leave blank to keep existing key</span>
+            </div>
+            <div class="setting-group">
+              <label>Base URL (optional, for custom endpoints)</label>
+              <input type="text" id="profileEditorBaseURL" placeholder="Auto-detected from provider">
+            </div>
+            <div class="profile-editor-actions">
+              <button class="btn-primary" onclick="saveProfile()">Save</button>
+              <button class="btn-secondary" onclick="hideProfileEditor()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About View -->
+    <div class="view" id="view-about">
+      <div class="about-container">
+        <h2>About OpenMinis PC</h2>
+        <p>OpenMinis PC is a desktop port of the <a href="https://openminis.app" target="_blank">OpenMinis</a> iOS/Android app.</p>
+        <p>It brings leading AI models into a native desktop experience with a real shell, file system access, and web browsing capabilities.</p>
+        <h3>Features</h3>
+        <ul>
+          <li>🔧 Real shell access (cmd.exe / bash)</li>
+          <li>📁 File system operations (read, write, edit)</li>
+          <li>🌐 Web content fetching</li>
+          <li>🧠 Persistent memory across sessions</li>
+          <li>🤖 Multi-model: configure multiple AI profiles and switch on the fly</li>
+        </ul>
+        <h3>Tech Stack</h3>
+        <p>Built with TypeScript, Node.js, and vanilla web technologies. Wrapped in Electron for a native desktop experience.</p>
+        <p class="oss">Open Source under GPLv3 · <a href="https://github.com/OpenMinis/OpenMinis" target="_blank">GitHub</a></p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
