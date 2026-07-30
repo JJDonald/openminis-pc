@@ -935,6 +935,30 @@ function escapeHtml(text) {
 }
 
 // =============================================================================
+// Theme Management (mirrors upstream OpenMinis Appearance settings)
+// =============================================================================
+
+const THEME_KEY = 'openminis-theme';
+
+function resolveAutoTheme() {
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(pref) {
+  const resolved = pref === 'auto' ? resolveAutoTheme() : pref;
+  document.documentElement.setAttribute('data-theme', resolved);
+}
+
+function getThemePreference() {
+  return localStorage.getItem(THEME_KEY) || 'dark';
+}
+
+// React to system theme changes when in 'auto' mode
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  if (getThemePreference() === 'auto') applyTheme('auto');
+});
+
+// =============================================================================
 // Initialize
 // =============================================================================
 
@@ -959,6 +983,17 @@ async function init() {
     langSel.value = i18n.getLangPreference();
     langSel.addEventListener('change', () => {
       i18n.setLang(langSel.value);
+    });
+  }
+
+  // Theme selector
+  const themeSel = document.getElementById('themeSelector');
+  if (themeSel) {
+    themeSel.value = getThemePreference();
+    applyTheme(themeSel.value);
+    themeSel.addEventListener('change', () => {
+      localStorage.setItem(THEME_KEY, themeSel.value);
+      applyTheme(themeSel.value);
     });
   }
 

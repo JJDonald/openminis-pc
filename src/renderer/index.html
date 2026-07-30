@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenMinis PC</title>
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Apply theme ASAP to avoid flash (mirrors upstream Appearance settings)
+  (function () {
+    var pref = localStorage.getItem('openminis-theme') || 'dark';
+    var resolved = pref === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : pref;
+    document.documentElement.setAttribute('data-theme', resolved);
+  })();
+</script>
 </head>
 <body>
 <div class="app">
@@ -78,7 +88,7 @@
     <!-- Models / Settings View -->
     <div class="view" id="view-settings">
       <div class="settings-container">
-        <!-- General Settings -->
+        <!-- Language -->
         <div class="settings-general">
           <h2 data-i18n="settings.language">Language</h2>
           <div class="setting-group setting-row">
@@ -86,6 +96,19 @@
               <option value="auto" data-i18n="settings.followSystem">Follow System</option>
               <option value="en" data-i18n="settings.languageEn">English</option>
               <option value="zh" data-i18n="settings.languageZh">简体中文</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.appearance">Appearance</h2>
+          <div class="setting-group setting-row">
+            <label data-i18n="settings.theme">Theme</label>
+            <select id="themeSelector" class="model-selector">
+              <option value="auto" data-i18n="settings.followSystem">Follow System</option>
+              <option value="dark" data-i18n="settings.themeDark">Dark</option>
+              <option value="light" data-i18n="settings.themeLight">Light</option>
             </select>
           </div>
         </div>

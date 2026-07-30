@@ -63,6 +63,12 @@ const TRANSLATIONS = {
     'settings.languageZh': '简体中文',
     'settings.followSystem': 'Follow System',
 
+    // Settings - Appearance
+    'settings.appearance': 'Appearance',
+    'settings.theme': 'Theme',
+    'settings.themeDark': 'Dark',
+    'settings.themeLight': 'Light',
+
     // Settings - Models
     'settings.aiModels': 'AI Models',
     'settings.addModel': '+ Add Model',
@@ -162,6 +168,12 @@ const TRANSLATIONS = {
     'settings.languageEn': 'English',
     'settings.languageZh': '简体中文',
     'settings.followSystem': '跟随系统',
+
+    // 设置 - 外观
+    'settings.appearance': '外观',
+    'settings.theme': '主题',
+    'settings.themeDark': '深色',
+    'settings.themeLight': '浅色',
 
     // 设置 - 模型
     'settings.aiModels': 'AI 模型',

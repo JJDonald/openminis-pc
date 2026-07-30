@@ -23,6 +23,25 @@
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
+/* Light theme — mirrors upstream OpenMinis Appearance > Light */
+:root[data-theme="light"] {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8e8ed;
+  --bg-input: #ffffff;
+  --text-primary: #1a1a2e;
+  --text-secondary: #555566;
+  --text-muted: #8a8a9a;
+  --accent: #6c63ff;
+  --accent-hover: #5a52e0;
+  --accent-light: rgba(108, 99, 255, 0.1);
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --border: #d8d8e0;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
 * {
   margin: 0;
   padding: 0;
