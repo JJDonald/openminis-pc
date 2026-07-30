@@ -217,7 +217,7 @@ export class AnthropicProvider {
     return tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: {
+      input_schema: tool.inputSchema || {
         type: 'object',
         properties: Object.fromEntries(
           Object.entries(tool.parameters).map(([key, param]) => [

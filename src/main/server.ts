@@ -10,6 +10,8 @@ import { AgentLoop, AgentLoopConfig } from './agent/AgentLoop';
 import { ProviderFactory } from './providers/ProviderFactory';
 import { makeAgentTools } from './tools/ToolDefinitions';
 import { AgentLoopCallbacks, LLMUsage, ProviderType } from './providers/types';
+import { SkillManager } from './skills/SkillManager';
+import { MCPManager, MCPServerConfig } from './mcp/MCPManager';
 
 const PORT = 19840;
 const WORKSPACE_DIR = process.env.OPENMINIS_WORKSPACE || path.join(process.cwd(), 'workspace');
@@ -32,6 +34,9 @@ function addLog(level: string, msg: string): void {
 fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
 fs.mkdirSync(MEMORY_DIR, { recursive: true });
 fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+const skillManager = new SkillManager(WORKSPACE_DIR);
+const mcpManager = new MCPManager(WORKSPACE_DIR);
 
 // ---- Profile Types ----
 interface ModelProfile {
@@ -585,6 +590,93 @@ function createServer(): http.Server {
       }
       jsonReply(res, 200, { ok: true });
       return;
+    }
+
+    // =====================================================================
+    // Skills API — workspace SKILL.md management
+    // =====================================================================
+    if (url.pathname === '/api/skills') {
+      if (req.method === 'GET') {
+        jsonReply(res, 200, { skills: skillManager.list() });
+        return;
+      }
+      if (req.method === 'POST') {
+        try {
+          const input = JSON.parse(await readBody(req));
+          const skill = skillManager.save(input);
+          addLog('info', `Skill saved: ${skill.id}`);
+          jsonReply(res, 200, { ok: true, skill });
+        } catch (err) { jsonReply(res, 400, { error: (err as Error).message }); }
+        return;
+      }
+    }
+    if (url.pathname.startsWith('/api/skills/')) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const id = decodeURIComponent(parts[2] || '');
+      if (parts[3] === 'enabled' && req.method === 'PUT') {
+        try {
+          const { enabled } = JSON.parse(await readBody(req));
+          skillManager.setEnabled(id, enabled === true);
+          jsonReply(res, 200, { ok: true });
+        } catch (err) { jsonReply(res, 400, { error: (err as Error).message }); }
+        return;
+      }
+      if (req.method === 'GET') {
+        try { jsonReply(res, 200, { skill: skillManager.get(id) }); }
+        catch (err) { jsonReply(res, 404, { error: (err as Error).message }); }
+        return;
+      }
+      if (req.method === 'DELETE') {
+        try {
+          skillManager.remove(id);
+          addLog('info', `Skill removed: ${id}`);
+          jsonReply(res, 200, { ok: true });
+        } catch (err) { jsonReply(res, 404, { error: (err as Error).message }); }
+        return;
+      }
+    }
+
+    // =====================================================================
+    // MCP API — server config, status and tool discovery
+    // =====================================================================
+    if (url.pathname === '/api/mcp') {
+      if (req.method === 'GET') {
+        jsonReply(res, 200, { servers: mcpManager.listConfigs() });
+        return;
+      }
+      if (req.method === 'POST') {
+        try {
+          const config = mcpManager.save(JSON.parse(await readBody(req)) as MCPServerConfig);
+          addLog('info', `MCP server saved: ${config.id}`);
+          jsonReply(res, 200, { ok: true, server: config });
+        } catch (err) { jsonReply(res, 400, { error: (err as Error).message }); }
+        return;
+      }
+    }
+    if (url.pathname.startsWith('/api/mcp/')) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const id = decodeURIComponent(parts[2] || '');
+      if (parts[3] === 'enabled' && req.method === 'PUT') {
+        try {
+          const { enabled } = JSON.parse(await readBody(req));
+          mcpManager.setEnabled(id, enabled === true);
+          jsonReply(res, 200, { ok: true });
+        } catch (err) { jsonReply(res, 400, { error: (err as Error).message }); }
+        return;
+      }
+      if (parts[3] === 'inspect' && req.method === 'GET') {
+        try { jsonReply(res, 200, await mcpManager.inspect(id)); }
+        catch (err) { jsonReply(res, 404, { error: (err as Error).message }); }
+        return;
+      }
+      if (req.method === 'DELETE') {
+        try {
+          mcpManager.remove(id);
+          addLog('info', `MCP server removed: ${id}`);
+          jsonReply(res, 200, { ok: true });
+        } catch (err) { jsonReply(res, 404, { error: (err as Error).message }); }
+        return;
+      }
     }
 
     // =====================================================================

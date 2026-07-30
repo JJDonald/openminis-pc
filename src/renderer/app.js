@@ -1021,6 +1021,176 @@ async function clearMemories() {
   } catch (err) { console.error('Failed to clear memories:', err); }
 }
 
+// ---- Skills ----
+let skillsCache = [];
+async function loadSkills() {
+  try {
+    const data = await (await fetch(`${API_BASE}/api/skills`)).json();
+    skillsCache = data.skills || [];
+    const list = document.getElementById('skillsList');
+    if (!list) return;
+    if (skillsCache.length === 0) {
+      list.innerHTML = `<div class="profile-empty">${escapeHtml(i18n.t('settings.noSkills'))}</div>`;
+      return;
+    }
+    list.innerHTML = skillsCache.map(s => `
+      <div class="extension-card">
+        <input class="extension-toggle" type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSkill('${s.id}', this.checked)">
+        <div class="extension-card-info">
+          <div class="extension-card-name">${escapeHtml(s.name)}</div>
+          <div class="extension-card-description">${escapeHtml(s.description || '')}</div>
+          <div class="extension-card-meta">${escapeHtml(s.id)} · ${formatBytes(s.size)}</div>
+        </div>
+        <div class="extension-card-actions">
+          <button onclick="editSkill('${s.id}')">${escapeHtml(i18n.t('settings.edit'))}</button>
+          <button class="danger" onclick="deleteSkill('${s.id}')">${escapeHtml(i18n.t('settings.delete'))}</button>
+        </div>
+      </div>`).join('');
+  } catch (err) { console.error('Failed to load skills:', err); }
+}
+
+async function toggleSkill(id, enabled) {
+  await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}/enabled`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+  });
+  loadSkills();
+}
+
+function showSkillEditor(skill) {
+  document.getElementById('skillEditorId').value = skill ? skill.id : '';
+  document.getElementById('skillEditorName').value = skill ? skill.id : '';
+  document.getElementById('skillEditorName').disabled = !!skill;
+  document.getElementById('skillEditorContent').value = skill ? skill.content : '';
+  document.getElementById('skillEditorTitle').textContent = i18n.t(skill ? 'settings.editSkill' : 'settings.addSkill');
+  document.getElementById('skillEditorOverlay').style.display = 'flex';
+}
+function hideSkillEditor() { document.getElementById('skillEditorOverlay').style.display = 'none'; }
+async function editSkill(id) {
+  const data = await (await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}`)).json();
+  if (data.skill) showSkillEditor(data.skill);
+}
+async function saveSkill() {
+  const id = document.getElementById('skillEditorId').value || document.getElementById('skillEditorName').value.trim();
+  const content = document.getElementById('skillEditorContent').value;
+  if (!id || !content.trim()) return;
+  const response = await fetch(`${API_BASE}/api/skills`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: id, content, enabled: true }),
+  });
+  const data = await response.json();
+  if (!response.ok) { alert(data.error || 'Failed to save skill'); return; }
+  hideSkillEditor(); loadSkills();
+}
+async function deleteSkill(id) {
+  if (!confirm(i18n.t('settings.deleteConfirm'))) return;
+  await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  loadSkills();
+}
+
+// ---- MCP Plugins ----
+let mcpCache = [];
+async function loadMcpServers() {
+  try {
+    const data = await (await fetch(`${API_BASE}/api/mcp`)).json();
+    mcpCache = data.servers || [];
+    const list = document.getElementById('mcpList');
+    if (!list) return;
+    if (mcpCache.length === 0) {
+      list.innerHTML = `<div class="profile-empty">${escapeHtml(i18n.t('settings.noPlugins'))}</div>`;
+      return;
+    }
+    list.innerHTML = mcpCache.map(s => `
+      <div class="extension-card" id="mcp-card-${s.id}">
+        <input class="extension-toggle" type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleMcp('${s.id}', this.checked)">
+        <div class="extension-card-info">
+          <div class="extension-card-name">${escapeHtml(s.name)}</div>
+          <div class="extension-card-description">${escapeHtml(s.transport === 'http' ? (s.url || '') : [s.command, ...(s.args || [])].filter(Boolean).join(' '))}</div>
+          <div class="extension-card-meta"><span class="extension-status" id="mcp-status-${s.id}">${escapeHtml(i18n.t(s.enabled ? 'settings.enabled' : 'settings.disabled'))}</span></div>
+          <div class="extension-tools" id="mcp-tools-${s.id}" style="display:none;"></div>
+        </div>
+        <div class="extension-card-actions">
+          <button onclick="inspectMcp('${s.id}')">${escapeHtml(i18n.t('settings.inspect'))}</button>
+          <button onclick="editMcp('${s.id}')">${escapeHtml(i18n.t('settings.edit'))}</button>
+          <button class="danger" onclick="deleteMcp('${s.id}')">${escapeHtml(i18n.t('settings.delete'))}</button>
+        </div>
+      </div>`).join('');
+  } catch (err) { console.error('Failed to load MCP servers:', err); }
+}
+
+async function toggleMcp(id, enabled) {
+  await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/enabled`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+  });
+  loadMcpServers();
+}
+
+function updateMcpFields() {
+  const isHttp = document.getElementById('mcpEditorTransport').value === 'http';
+  document.getElementById('mcpStdioFields').style.display = isHttp ? 'none' : '';
+  document.getElementById('mcpHttpFields').style.display = isHttp ? '' : 'none';
+}
+function showMcpEditor(server) {
+  document.getElementById('mcpEditorId').value = server ? server.id : '';
+  document.getElementById('mcpEditorName').value = server ? server.name : '';
+  document.getElementById('mcpEditorTransport').value = server ? server.transport : 'stdio';
+  document.getElementById('mcpEditorCommand').value = server ? (server.command || '') : '';
+  document.getElementById('mcpEditorArgs').value = JSON.stringify(server?.args || [], null, 2);
+  document.getElementById('mcpEditorEnv').value = JSON.stringify(server?.env || {}, null, 2);
+  document.getElementById('mcpEditorUrl').value = server ? (server.url || '') : '';
+  document.getElementById('mcpEditorHeaders').value = JSON.stringify(server?.headers || {}, null, 2);
+  document.getElementById('mcpEditorTitle').textContent = i18n.t(server ? 'settings.editPlugin' : 'settings.addPlugin');
+  updateMcpFields();
+  document.getElementById('mcpEditorOverlay').style.display = 'flex';
+}
+function hideMcpEditor() { document.getElementById('mcpEditorOverlay').style.display = 'none'; }
+function editMcp(id) { const server = mcpCache.find(s => s.id === id); if (server) showMcpEditor(server); }
+function parseJsonField(id, fallback) {
+  const value = document.getElementById(id).value.trim();
+  return value ? JSON.parse(value) : fallback;
+}
+async function saveMcp() {
+  try {
+    const id = document.getElementById('mcpEditorId').value;
+    const name = document.getElementById('mcpEditorName').value.trim();
+    const transport = document.getElementById('mcpEditorTransport').value;
+    const payload = { id: id || undefined, name, transport, enabled: true };
+    if (transport === 'http') {
+      payload.url = document.getElementById('mcpEditorUrl').value.trim();
+      payload.headers = parseJsonField('mcpEditorHeaders', {});
+    } else {
+      payload.command = document.getElementById('mcpEditorCommand').value.trim();
+      payload.args = parseJsonField('mcpEditorArgs', []);
+      payload.env = parseJsonField('mcpEditorEnv', {});
+    }
+    const response = await fetch(`${API_BASE}/api/mcp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) { alert(data.error || 'Failed to save plugin'); return; }
+    hideMcpEditor(); loadMcpServers();
+  } catch (err) { alert(err.message); }
+}
+async function inspectMcp(id) {
+  const status = document.getElementById(`mcp-status-${id}`);
+  const tools = document.getElementById(`mcp-tools-${id}`);
+  if (status) { status.textContent = i18n.t('sidebar.processing'); status.className = 'extension-status'; }
+  const data = await (await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/inspect`)).json();
+  if (status) {
+    status.textContent = i18n.t(data.status === 'connected' ? 'settings.connected' : 'settings.disconnected');
+    status.className = `extension-status ${data.status === 'connected' ? 'connected' : 'error'}`;
+  }
+  if (tools) {
+    tools.style.display = '';
+    tools.textContent = data.status === 'connected'
+      ? i18n.t('settings.toolsCount', { n: data.tools.length }) + (data.tools.length ? ': ' + data.tools.map(t => t.name).join(', ') : '')
+      : (data.error || 'Connection failed');
+  }
+}
+async function deleteMcp(id) {
+  if (!confirm(i18n.t('settings.deleteConfirm'))) return;
+  await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  loadMcpServers();
+}
+
 // ---- Storage ----
 async function loadStorage() {
   try {
@@ -1074,6 +1244,8 @@ function statRow(label, value) {
 function loadAllSettings() {
   loadSoul();
   loadMemory();
+  loadSkills();
+  loadMcpServers();
   loadStorage();
   loadLogs();
 }
@@ -1125,6 +1297,24 @@ async function init() {
   // Memory management
   const clearMemBtn = document.getElementById('clearMemoriesBtn');
   if (clearMemBtn) clearMemBtn.addEventListener('click', clearMemories);
+
+  // Skills management
+  const addSkillBtn = document.getElementById('addSkillBtn');
+  if (addSkillBtn) addSkillBtn.addEventListener('click', () => showSkillEditor());
+  const saveSkillBtn = document.getElementById('saveSkillBtn');
+  if (saveSkillBtn) saveSkillBtn.addEventListener('click', saveSkill);
+  const cancelSkillBtn = document.getElementById('cancelSkillBtn');
+  if (cancelSkillBtn) cancelSkillBtn.addEventListener('click', hideSkillEditor);
+
+  // MCP plugin management
+  const addMcpBtn = document.getElementById('addMcpBtn');
+  if (addMcpBtn) addMcpBtn.addEventListener('click', () => showMcpEditor());
+  const saveMcpBtn = document.getElementById('saveMcpBtn');
+  if (saveMcpBtn) saveMcpBtn.addEventListener('click', saveMcp);
+  const cancelMcpBtn = document.getElementById('cancelMcpBtn');
+  if (cancelMcpBtn) cancelMcpBtn.addEventListener('click', hideMcpEditor);
+  const mcpTransport = document.getElementById('mcpEditorTransport');
+  if (mcpTransport) mcpTransport.addEventListener('change', updateMcpFields);
 
   // Storage
   const refreshStorageBtn = document.getElementById('refreshStorageBtn');

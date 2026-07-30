@@ -1006,6 +1006,39 @@ body {
   line-height: 1.5;
 }
 
+/* ===== Skills / MCP extensions ===== */
+.extension-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.extension-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.extension-card-info { flex: 1; min-width: 0; }
+.extension-card-name { font-weight: 600; color: var(--text-primary); }
+.extension-card-description { margin-top: 4px; font-size: 0.8rem; color: var(--text-muted); white-space: pre-wrap; }
+.extension-card-meta { margin-top: 5px; font-size: 0.75rem; color: var(--text-secondary); }
+.extension-card-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.extension-card-actions button { padding: 5px 9px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); cursor: pointer; }
+.extension-card-actions button.danger { color: var(--error); }
+.extension-card-actions button:hover { border-color: var(--accent); }
+.extension-toggle { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--accent); }
+.extension-status.connected { color: var(--success); }
+.extension-status.error { color: var(--error); }
+.extension-tools { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.76rem; color: var(--text-secondary); }
+.extension-editor { max-width: 680px; }
+.extension-code { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.8rem; }
+
 /* ===== Profile List (settings) ===== */
 .settings-header {
   display: flex;

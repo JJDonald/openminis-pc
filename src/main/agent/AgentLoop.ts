@@ -17,6 +17,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LLMProvider } from '../providers/ProviderFactory';
 import { ShellExecutor, FileTools, MemoryTools, BrowserFetch } from '../tools/ToolExecutors';
+import { SkillManager } from '../skills/SkillManager';
+import { MCPManager } from '../mcp/MCPManager';
 import { buildSystemPrompt } from './SystemPrompt';
 
 const MAX_AGENT_TURNS = 200;
@@ -36,6 +38,8 @@ export class AgentLoop {
   private files: FileTools;
   private memory: MemoryTools;
   private browser: BrowserFetch;
+  private skills: SkillManager;
+  private mcp: MCPManager;
   private agentHistory: AgentMessage[] = [];
   private isCancelled = false;
   private callbacks: AgentLoopCallbacks | null = null;
@@ -46,6 +50,8 @@ export class AgentLoop {
     this.files = new FileTools();
     this.memory = new MemoryTools(config.memoryDir);
     this.browser = new BrowserFetch();
+    this.skills = new SkillManager(config.workspaceDir);
+    this.mcp = new MCPManager(config.workspaceDir);
   }
 
   async initialize(): Promise<void> {
@@ -83,7 +89,11 @@ export class AgentLoop {
       persona = fs.readFileSync(soulPath, 'utf-8');
     } catch { /* no soul file */ }
 
-    const systemPrompt = buildSystemPrompt(this.config.memoryEnabled, persona);
+    // Skills are also loaded fresh for every run. MCP tools are discovered from enabled servers.
+    const skillPrompt = this.skills.buildPrompt();
+    const systemPrompt = buildSystemPrompt(this.config.memoryEnabled, persona, skillPrompt);
+    const mcpTools = await this.mcp.makeAgentTools();
+    const runtimeTools = [...tools, ...mcpTools];
     let turnCount = 0;
 
     while (turnCount < MAX_AGENT_TURNS && !this.isCancelled) {
@@ -102,7 +112,7 @@ export class AgentLoop {
         const stream = this.config.provider.streamMessage(
           messages,
           systemPrompt,
-          tools,
+          runtimeTools,
           this.config.maxTokens || 64000,
         );
 
@@ -230,6 +240,10 @@ export class AgentLoop {
     name: string,
     args: Record<string, unknown>,
   ): Promise<ToolExecutionResult> {
+    if (this.mcp.isMCPTool(name)) {
+      return await this.mcp.callAgentTool(name, args);
+    }
+
     switch (name) {
       case 'shell_execute': {
         const command = String(args.command || '');

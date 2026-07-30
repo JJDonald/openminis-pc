@@ -134,6 +134,26 @@
           <button class="btn-secondary btn-sm" id="clearMemoriesBtn" data-i18n="settings.clearMemories">Clear All Memories</button>
         </div>
 
+        <!-- Skills -->
+        <div class="settings-general">
+          <div class="settings-header">
+            <h2 data-i18n="settings.skills">Skills</h2>
+            <button class="btn-primary btn-sm" id="addSkillBtn" data-i18n="settings.addSkill">+ Add Skill</button>
+          </div>
+          <p class="setting-hint" data-i18n="settings.skillsHint">Workspace skills are loaded from SKILL.md files and injected into the agent prompt.</p>
+          <div id="skillsList" class="extension-list"></div>
+        </div>
+
+        <!-- MCP Plugins -->
+        <div class="settings-general">
+          <div class="settings-header">
+            <h2 data-i18n="settings.plugins">Plugins / MCP</h2>
+            <button class="btn-primary btn-sm" id="addMcpBtn" data-i18n="settings.addPlugin">+ Add Plugin</button>
+          </div>
+          <p class="setting-hint" data-i18n="settings.pluginsHint">Connect MCP servers over stdio or HTTP and expose their tools to the agent.</p>
+          <div id="mcpList" class="extension-list"></div>
+        </div>
+
         <!-- Storage -->
         <div class="settings-general">
           <h2 data-i18n="settings.storage">Storage</h2>
@@ -157,6 +177,73 @@
         </div>
         <div class="profile-list" id="profileList">
           <div class="profile-empty" data-i18n="settings.noModels">No models configured yet. Click "+ Add Model" to get started.</div>
+        </div>
+
+        <!-- Skill Editor -->
+        <div class="profile-editor-overlay" id="skillEditorOverlay" style="display:none;">
+          <div class="profile-editor extension-editor">
+            <h3 id="skillEditorTitle" data-i18n="settings.addSkill">Add Skill</h3>
+            <input type="hidden" id="skillEditorId">
+            <div class="setting-group">
+              <label data-i18n="settings.skillName">Skill Name</label>
+              <input type="text" id="skillEditorName" placeholder="code-review">
+            </div>
+            <div class="setting-group">
+              <label>SKILL.md</label>
+              <textarea id="skillEditorContent" class="soul-editor extension-code" rows="14" data-i18n-placeholder="settings.skillContentPlaceholder"></textarea>
+            </div>
+            <div class="profile-editor-actions">
+              <button class="btn-primary" id="saveSkillBtn" data-i18n="settings.save">Save</button>
+              <button class="btn-secondary" id="cancelSkillBtn" data-i18n="settings.cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MCP Editor -->
+        <div class="profile-editor-overlay" id="mcpEditorOverlay" style="display:none;">
+          <div class="profile-editor extension-editor">
+            <h3 id="mcpEditorTitle" data-i18n="settings.addPlugin">Add Plugin</h3>
+            <input type="hidden" id="mcpEditorId">
+            <div class="setting-group">
+              <label data-i18n="settings.pluginName">Plugin Name</label>
+              <input type="text" id="mcpEditorName" placeholder="filesystem">
+            </div>
+            <div class="setting-group">
+              <label data-i18n="settings.transport">Transport</label>
+              <select id="mcpEditorTransport">
+                <option value="stdio">stdio</option>
+                <option value="http">HTTP / Streamable HTTP</option>
+              </select>
+            </div>
+            <div id="mcpStdioFields">
+              <div class="setting-group">
+                <label data-i18n="settings.command">Command</label>
+                <input type="text" id="mcpEditorCommand" placeholder="npx">
+              </div>
+              <div class="setting-group">
+                <label data-i18n="settings.arguments">Arguments (JSON array)</label>
+                <textarea id="mcpEditorArgs" class="soul-editor extension-code" rows="3" placeholder='["-y", "@modelcontextprotocol/server-filesystem", "."]'></textarea>
+              </div>
+              <div class="setting-group">
+                <label data-i18n="settings.environment">Environment (JSON object)</label>
+                <textarea id="mcpEditorEnv" class="soul-editor extension-code" rows="3" placeholder='{"API_KEY":"..."}'></textarea>
+              </div>
+            </div>
+            <div id="mcpHttpFields" style="display:none;">
+              <div class="setting-group">
+                <label>URL</label>
+                <input type="text" id="mcpEditorUrl" placeholder="https://example.com/mcp">
+              </div>
+              <div class="setting-group">
+                <label data-i18n="settings.headers">Headers (JSON object)</label>
+                <textarea id="mcpEditorHeaders" class="soul-editor extension-code" rows="3" placeholder='{"Authorization":"Bearer ..."}'></textarea>
+              </div>
+            </div>
+            <div class="profile-editor-actions">
+              <button class="btn-primary" id="saveMcpBtn" data-i18n="settings.save">Save</button>
+              <button class="btn-secondary" id="cancelMcpBtn" data-i18n="settings.cancel">Cancel</button>
+            </div>
+          </div>
         </div>
 
         <!-- Profile Editor (hidden, shown as overlay) -->

@@ -250,7 +250,7 @@ export class OpenAIProvider {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: {
+        parameters: tool.inputSchema || {
           type: 'object',
           properties: Object.fromEntries(
             Object.entries(tool.parameters).map(([key, param]) => [

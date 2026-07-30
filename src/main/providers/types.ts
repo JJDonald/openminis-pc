@@ -11,6 +11,8 @@ export interface AgentToolDefinition {
   parameters: Record<string, AgentToolParam>;
   required: string[];
   propertyOrdering?: string[];
+  /** Original JSON Schema for dynamic tools such as MCP (supports nested objects/arrays). */
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface AgentToolParam {
