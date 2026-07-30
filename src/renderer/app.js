@@ -71,7 +71,7 @@ async function loadSessionList() {
 
 function renderSessionList() {
   if (sessionsCache.length === 0) {
-    sessionsList.innerHTML = '<div class="sessions-empty">No conversations yet</div>';
+    sessionsList.innerHTML = '<div class="sessions-empty">' + escapeHtml(i18n.t('sidebar.noConversations')) + '</div>';
     return;
   }
 
@@ -98,10 +98,10 @@ function formatTime(ts) {
   const diffHr = Math.floor(diffMs / 3600000);
   const diffDay = Math.floor(diffMs / 86400000);
 
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffMin < 1) return i18n.t('time.justNow');
+  if (diffMin < 60) return i18n.t('time.minAgo', { n: diffMin });
+  if (diffHr < 24) return i18n.t('time.hourAgo', { n: diffHr });
+  if (diffDay < 7) return i18n.t('time.dayAgo', { n: diffDay });
   return d.toLocaleDateString();
 }
 
@@ -155,7 +155,7 @@ async function switchSession(id, updateList = true) {
                 <div class="tool-header" onclick="toggleToolBody('tool-body-${tc.id}')">
                   <span class="tool-icon">🔧</span>
                   <span class="tool-name">${escapeHtml(tc.name)}</span>
-                  <span class="tool-status done">✓ done</span>
+                  <span class="tool-status done">${escapeHtml(i18n.t('chat.done'))}</span>
                 </div>
                 <div class="tool-body" id="tool-body-${tc.id}" style="display:none;">
                   <div class="tool-args">${escapeHtml(JSON.stringify(tc.args, null, 2))}</div>
@@ -194,7 +194,7 @@ async function switchSession(id, updateList = true) {
 }
 
 async function deleteSession(id) {
-  if (!confirm('Delete this conversation?')) return;
+  if (!confirm(i18n.t('search.deleteConfirm'))) return;
 
   try {
     const resp = await fetch(`${API_BASE}/api/sessions/${id}`, { method: 'DELETE' });
@@ -290,15 +290,29 @@ function showWelcome() {
   chatMessages.innerHTML = `
     <div class="welcome">
       <div class="welcome-icon">🧠</div>
-      <h2>Welcome to OpenMinis PC</h2>
-      <p>Your private, on-device AI agent with a real shell.</p>
+      <h2>${i18n.t('chat.welcomeTitle')}</h2>
+      <p>${i18n.t('chat.welcomeDesc')}</p>
       <div class="quick-actions">
-        <button class="quick-btn" onclick="sendQuick('List files in the current directory')">📂 List files</button>
-        <button class="quick-btn" onclick="sendQuick('What is my operating system and hardware?')">💻 System info</button>
-        <button class="quick-btn" onclick="sendQuick('Create a simple Python web server script')">🐍 Python script</button>
+        <button class="quick-btn" id="quickListFiles">📂 <span>${i18n.t('chat.listFiles')}</span></button>
+        <button class="quick-btn" id="quickSystemInfo">💻 <span>${i18n.t('chat.systemInfo')}</span></button>
+        <button class="quick-btn" id="quickPythonScript">🐍 <span>${i18n.t('chat.pythonScript')}</span></button>
       </div>
     </div>
   `;
+  attachQuickActions();
+}
+
+// Quick action buttons — prompts are localized
+function attachQuickActions() {
+  const map = {
+    quickListFiles: 'chat.listFilesPrompt',
+    quickSystemInfo: 'chat.systemInfoPrompt',
+    quickPythonScript: 'chat.pythonScriptPrompt',
+  };
+  for (const [id, key] of Object.entries(map)) {
+    const btn = document.getElementById(id);
+    if (btn) btn.onclick = () => sendQuick(i18n.t(key));
+  }
 }
 
 // Event: New session button
@@ -349,7 +363,7 @@ async function performSearch() {
     const results = data.results || [];
 
     if (results.length === 0) {
-      searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+      searchResults.innerHTML = '<div class="search-no-results">' + escapeHtml(i18n.t('search.noResults')) + '</div>';
     } else {
       searchResults.innerHTML = results.map(r => `
         <div class="search-result-item" onclick="switchSession('${r.session.id}')">
@@ -545,7 +559,7 @@ function handleThinkingDelta(text) {
   if (!thinkBlock) {
     thinkBlock = document.createElement('div');
     thinkBlock.className = 'thinking-block';
-    thinkBlock.textContent = '🤔 Thinking...';
+    thinkBlock.textContent = '🤔 ' + i18n.t('chat.thinking');
     currentAssistantMsg.querySelector('.message-content').after(thinkBlock);
   }
   thinkBlock.textContent = '🤔 ' + text.substring(0, 500);
@@ -562,10 +576,10 @@ function handleToolStart(id, name) {
     <div class="tool-header" onclick="toggleToolBody('tool-body-${id}')">
       <span class="tool-icon">🔧</span>
       <span class="tool-name">${escapeHtml(name)}</span>
-      <span class="tool-status running">running...</span>
+      <span class="tool-status running">${escapeHtml(i18n.t('chat.running'))}</span>
     </div>
     <div class="tool-body" id="tool-body-${id}">
-      <div class="tool-args">Preparing...</div>
+      <div class="tool-args">${escapeHtml(i18n.t('chat.preparing'))}</div>
     </div>
   `;
 
@@ -607,14 +621,14 @@ function handleToolResult(id, output, success) {
 
   const statusEl = info.block.querySelector('.tool-status');
   if (statusEl) {
-    statusEl.textContent = success ? '✓ done' : '✗ error';
+    statusEl.textContent = success ? i18n.t('chat.done') : i18n.t('chat.error');
     statusEl.className = `tool-status ${success ? 'done' : 'error'}`;
   }
 
   const bodyEl = info.block.querySelector('.tool-body');
   if (bodyEl) {
     const truncated = output.length > 5000
-      ? output.substring(0, 5000) + '\n\n... (truncated)'
+      ? output.substring(0, 5000) + '\n\n' + i18n.t('chat.truncated')
       : output;
     const resultDiv = document.createElement('div');
     resultDiv.innerHTML = `<pre>${escapeHtml(truncated)}</pre>`;
@@ -667,7 +681,7 @@ function handleCancelled() {
 
   const cancelNote = document.createElement('div');
   cancelNote.className = 'error-message';
-  cancelNote.textContent = '⏹ Task cancelled.';
+  cancelNote.textContent = i18n.t('chat.cancelled');
   chatMessages.appendChild(cancelNote);
 }
 
@@ -693,7 +707,7 @@ function addMessage(role, content) {
 
   const label = document.createElement('div');
   label.className = 'message-label';
-  label.textContent = role === 'user' ? 'You' : 'Minis';
+  label.textContent = role === 'user' ? i18n.t('chat.you') : i18n.t('chat.minis');
 
   const contentDiv = document.createElement('div');
   contentDiv.className = 'message-content';
@@ -730,10 +744,10 @@ function setProcessing(processing) {
 
   if (processing) {
     statusDot.className = 'status-dot processing';
-    statusText.textContent = 'Processing...';
+    statusText.textContent = i18n.t('sidebar.processing');
   } else {
     statusDot.className = 'status-dot';
-    statusText.textContent = 'Ready';
+    statusText.textContent = i18n.t('sidebar.ready');
   }
 }
 
@@ -778,8 +792,8 @@ async function refreshModelSelector() {
 
   sel.innerHTML = '';
   if (data.profiles.length === 0) {
-    sel.innerHTML = '<option value="">— No model configured —</option>';
-    hint.textContent = '⚙️ Add models in Settings';
+    sel.innerHTML = '<option value="">' + escapeHtml(i18n.t('chat.noModel')) + '</option>';
+    hint.textContent = i18n.t('profile.addModelsHint');
     return;
   }
 
@@ -813,7 +827,7 @@ async function renderProfileList() {
   const data = await fetchProfiles();
 
   if (data.profiles.length === 0) {
-    list.innerHTML = '<div class="profile-empty">No models configured yet. Click "+ Add Model" to get started.</div>';
+    list.innerHTML = '<div class="profile-empty">' + escapeHtml(i18n.t('settings.noModels')) + '</div>';
     return;
   }
 
@@ -846,7 +860,7 @@ async function activateProfile(id) {
 }
 
 async function deleteProfile(id) {
-  if (!confirm('Delete this model profile?')) return;
+  if (!confirm(i18n.t('profile.deleteConfirm'))) return;
   await fetch(`${API_BASE}/api/profiles/${id}`, { method: 'DELETE' });
   renderProfileList();
   refreshModelSelector();
@@ -855,7 +869,7 @@ async function deleteProfile(id) {
 // ---- Profile Editor ----
 function showProfileEditor(profile) {
   const overlay = document.getElementById('profileEditorOverlay');
-  document.getElementById('profileEditorTitle').textContent = profile ? 'Edit Model' : 'Add Model';
+  document.getElementById('profileEditorTitle').textContent = profile ? i18n.t('settings.editModelTitle') : i18n.t('settings.addModelTitle');
   document.getElementById('profileEditorId').value = profile ? profile.id : '';
   document.getElementById('profileEditorName').value = profile ? profile.name : '';
   document.getElementById('profileEditorProvider').value = profile ? profile.provider : 'anthropic';
@@ -896,8 +910,8 @@ async function saveProfile() {
     baseURL: document.getElementById('profileEditorBaseURL').value.trim(),
   };
 
-  if (!profile.name) profile.name = profile.model || 'Unnamed';
-  if (!profile.model) { alert('Model ID is required.'); return; }
+  if (!profile.name) profile.name = profile.model || i18n.t('profile.unnamed');
+  if (!profile.model) { alert(i18n.t('profile.modelIdRequired')); return; }
 
   await fetch(`${API_BASE}/api/profiles`, {
     method: 'POST',
@@ -934,6 +948,39 @@ if (settingsBtn) {
 
 // Start
 async function init() {
+  // Apply translations to static DOM
+  i18n.apply();
+  // Attach quick-action handlers for the static welcome screen
+  attachQuickActions();
+
+  // Language selector
+  const langSel = document.getElementById('langSelector');
+  if (langSel) {
+    langSel.value = i18n.getLangPreference();
+    langSel.addEventListener('change', () => {
+      i18n.setLang(langSel.value);
+    });
+  }
+
+  // Re-render dynamic content when language changes
+  i18n.onChange(() => {
+    // Re-render welcome if visible
+    const welcome = chatMessages.querySelector('.welcome');
+    if (welcome) showWelcome();
+    // Re-render session list (time labels, empty state)
+    renderSessionList();
+    // Re-render profile list if in settings view
+    if (document.getElementById('view-settings').classList.contains('active')) {
+      renderProfileList();
+    }
+    // Update model selector placeholder
+    if (profilesCache.length === 0) refreshModelSelector();
+    // Re-apply static DOM translations
+    i18n.apply();
+    // Update lang selector to reflect resolved preference
+    if (langSel) langSel.value = i18n.getLangPreference();
+  });
+
   await refreshModelSelector();
   await loadSessionList();
 }

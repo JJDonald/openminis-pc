@@ -14,27 +14,27 @@
       <span class="version">PC v1.0</span>
     </div>
     <nav class="sidebar-nav">
-      <button class="nav-btn active" data-view="chat">💬 Chat</button>
-      <button class="nav-btn" data-view="settings">⚙️ Models</button>
-      <button class="nav-btn" data-view="about">ℹ️ About</button>
+      <button class="nav-btn active" data-view="chat" data-i18n="nav.chat">💬 Chat</button>
+      <button class="nav-btn" data-view="settings" data-i18n="nav.settings">⚙️ Settings</button>
+      <button class="nav-btn" data-view="about" data-i18n="nav.about">ℹ️ About</button>
     </nav>
     <div class="sidebar-sessions">
       <div class="sessions-header">
-        <span class="sessions-title">Chats</span>
-        <button class="sessions-new-btn" id="newSessionBtn" title="New Chat">+</button>
+        <span class="sessions-title" data-i18n="sidebar.chats">Chats</span>
+        <button class="sessions-new-btn" id="newSessionBtn" data-i18n-title="sidebar.newChat">+</button>
       </div>
       <div class="search-box">
-        <input type="text" id="searchInput" class="search-input" placeholder="Search conversations...">
-        <button class="search-clear" id="searchClear" title="Clear" style="display:none;">×</button>
+        <input type="text" id="searchInput" class="search-input" data-i18n-placeholder="sidebar.searchPlaceholder">
+        <button class="search-clear" id="searchClear" data-i18n-title="sidebar.clear" style="display:none;">×</button>
       </div>
       <div class="search-results" id="searchResults" style="display:none;"></div>
       <div class="sessions-list" id="sessionsList">
-        <div class="sessions-empty">No conversations yet</div>
+        <div class="sessions-empty" data-i18n="sidebar.noConversations">No conversations yet</div>
       </div>
     </div>
     <div class="sidebar-footer">
       <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">Ready</span>
+      <span id="statusText" data-i18n="sidebar.ready">Ready</span>
     </div>
   </aside>
 
@@ -45,32 +45,32 @@
         <div class="chat-messages" id="chatMessages">
           <div class="welcome">
             <div class="welcome-icon">🧠</div>
-            <h2>Welcome to OpenMinis PC</h2>
-            <p>Your private, on-device AI agent with a real shell.</p>
+            <h2 data-i18n="chat.welcomeTitle">Welcome to OpenMinis PC</h2>
+            <p data-i18n="chat.welcomeDesc">Your private, on-device AI agent with a real shell.</p>
             <div class="quick-actions">
-              <button class="quick-btn" onclick="sendQuick('List files in the current directory')">📂 List files</button>
-              <button class="quick-btn" onclick="sendQuick('What is my operating system and hardware?')">💻 System info</button>
-              <button class="quick-btn" onclick="sendQuick('Create a simple Python web server script')">🐍 Python script</button>
+              <button class="quick-btn" id="quickListFiles">📂 <span data-i18n="chat.listFiles">List files</span></button>
+              <button class="quick-btn" id="quickSystemInfo">💻 <span data-i18n="chat.systemInfo">System info</span></button>
+              <button class="quick-btn" id="quickPythonScript">🐍 <span data-i18n="chat.pythonScript">Python script</span></button>
             </div>
           </div>
         </div>
         <div class="chat-input-area">
           <div class="model-bar" id="modelBar">
-            <span class="model-bar-label">Model:</span>
+            <span class="model-bar-label" data-i18n="chat.modelLabel">Model:</span>
             <select id="modelSelector" class="model-selector">
-              <option value="">— No model configured —</option>
+              <option value="" data-i18n="chat.noModel">— No model configured —</option>
             </select>
-            <button class="model-bar-refresh" onclick="refreshModelSelector()" title="Refresh">↻</button>
+            <button class="model-bar-refresh" onclick="refreshModelSelector()" data-i18n-title="chat.refresh">↻</button>
             <span class="model-bar-hint" id="modelBarHint"></span>
           </div>
           <div class="chat-input-wrapper">
-            <textarea id="chatInput" placeholder="Ask Minis anything... (Shift+Enter for new line)" rows="1"></textarea>
+            <textarea id="chatInput" data-i18n-placeholder="chat.inputPlaceholder" rows="1"></textarea>
             <div class="input-actions">
-              <button id="sendBtn" title="Send (Enter)">▶</button>
-              <button id="stopBtn" title="Stop" style="display:none;">⏹</button>
+              <button id="sendBtn" data-i18n-title="chat.send">▶</button>
+              <button id="stopBtn" data-i18n-title="chat.stop" style="display:none;">⏹</button>
             </div>
           </div>
-          <div class="input-hint">Enter to send · Shift+Enter for new line · Switch model above ↖</div>
+          <div class="input-hint" data-i18n="chat.inputHint">Enter to send · Shift+Enter for new line · Switch model above ↖</div>
         </div>
       </div>
     </div>
@@ -78,25 +78,37 @@
     <!-- Models / Settings View -->
     <div class="view" id="view-settings">
       <div class="settings-container">
+        <!-- General Settings -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.language">Language</h2>
+          <div class="setting-group setting-row">
+            <select id="langSelector" class="model-selector">
+              <option value="auto" data-i18n="settings.followSystem">Follow System</option>
+              <option value="en" data-i18n="settings.languageEn">English</option>
+              <option value="zh" data-i18n="settings.languageZh">简体中文</option>
+            </select>
+          </div>
+        </div>
+
         <div class="settings-header">
-          <h2>AI Models</h2>
-          <button class="btn-primary btn-sm" onclick="showProfileEditor()">+ Add Model</button>
+          <h2 data-i18n="settings.aiModels">AI Models</h2>
+          <button class="btn-primary btn-sm" onclick="showProfileEditor()" data-i18n="settings.addModel">+ Add Model</button>
         </div>
         <div class="profile-list" id="profileList">
-          <div class="profile-empty">No models configured yet. Click "+ Add Model" to get started.</div>
+          <div class="profile-empty" data-i18n="settings.noModels">No models configured yet. Click "+ Add Model" to get started.</div>
         </div>
 
         <!-- Profile Editor (hidden, shown as overlay) -->
         <div class="profile-editor-overlay" id="profileEditorOverlay" style="display:none;">
           <div class="profile-editor">
-            <h3 id="profileEditorTitle">Add Model</h3>
+            <h3 id="profileEditorTitle" data-i18n="settings.addModelTitle">Add Model</h3>
             <input type="hidden" id="profileEditorId">
             <div class="setting-group">
-              <label>Display Name</label>
-              <input type="text" id="profileEditorName" placeholder="e.g. Claude for coding, GPT for writing">
+              <label data-i18n="settings.displayName">Display Name</label>
+              <input type="text" id="profileEditorName" data-i18n-placeholder="settings.displayNamePlaceholder">
             </div>
             <div class="setting-group">
-              <label>Provider</label>
+              <label data-i18n="settings.provider">Provider</label>
               <select id="profileEditorProvider">
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai">OpenAI (GPT)</option>
@@ -108,21 +120,21 @@
               </select>
             </div>
             <div class="setting-group">
-              <label>Model ID</label>
+              <label data-i18n="settings.modelId">Model ID</label>
               <input type="text" id="profileEditorModel" placeholder="claude-sonnet-4-20250514">
             </div>
             <div class="setting-group">
-              <label>API Key</label>
+              <label data-i18n="settings.apiKey">API Key</label>
               <input type="password" id="profileEditorApiKey" placeholder="sk-...">
-              <span class="setting-hint">Leave blank to keep existing key</span>
+              <span class="setting-hint" data-i18n="settings.apiKeyHint">Leave blank to keep existing key</span>
             </div>
             <div class="setting-group">
-              <label>Base URL (optional, for custom endpoints)</label>
-              <input type="text" id="profileEditorBaseURL" placeholder="Auto-detected from provider">
+              <label data-i18n="settings.baseURL">Base URL (optional, for custom endpoints)</label>
+              <input type="text" id="profileEditorBaseURL" data-i18n-placeholder="settings.baseURLPlaceholder">
             </div>
             <div class="profile-editor-actions">
-              <button class="btn-primary" onclick="saveProfile()">Save</button>
-              <button class="btn-secondary" onclick="hideProfileEditor()">Cancel</button>
+              <button class="btn-primary" onclick="saveProfile()" data-i18n="settings.save">Save</button>
+              <button class="btn-secondary" onclick="hideProfileEditor()" data-i18n="settings.cancel">Cancel</button>
             </div>
           </div>
         </div>
@@ -132,26 +144,27 @@
     <!-- About View -->
     <div class="view" id="view-about">
       <div class="about-container">
-        <h2>About OpenMinis PC</h2>
-        <p>OpenMinis PC is a desktop port of the <a href="https://openminis.app" target="_blank">OpenMinis</a> iOS/Android app.</p>
-        <p>It brings leading AI models into a native desktop experience with a real shell, file system access, and web browsing capabilities.</p>
-        <h3>Features</h3>
+        <h2 data-i18n="about.title">About OpenMinis PC</h2>
+        <p data-i18n="about.desc1">OpenMinis PC is a desktop port of the <a href="https://openminis.app" target="_blank">OpenMinis</a> iOS/Android app.</p>
+        <p data-i18n="about.desc2">It brings leading AI models into a native desktop experience with a real shell, file system access, and web browsing capabilities.</p>
+        <h3 data-i18n="about.features">Features</h3>
         <ul>
-          <li>🔧 Real shell access (cmd.exe / bash)</li>
-          <li>📁 File system operations (read, write, edit)</li>
-          <li>🌐 Web content fetching</li>
-          <li>🧠 Persistent memory across sessions</li>
-          <li>🤖 Multi-model: configure multiple AI profiles and switch on the fly</li>
+          <li data-i18n="about.feature1">🔧 Real shell access (cmd.exe / bash)</li>
+          <li data-i18n="about.feature2">📁 File system operations (read, write, edit)</li>
+          <li data-i18n="about.feature3">🌐 Web content fetching</li>
+          <li data-i18n="about.feature4">🧠 Persistent memory across sessions</li>
+          <li data-i18n="about.feature5">🤖 Multi-model: configure multiple AI profiles and switch on the fly</li>
         </ul>
-        <h3>Tech Stack</h3>
-        <p>Built with TypeScript, Node.js, and vanilla web technologies. Wrapped in Electron for a native desktop experience.</p>
-        <p class="oss">Open Source under GPLv3 · <a href="https://github.com/OpenMinis/OpenMinis" target="_blank">GitHub</a></p>
+        <h3 data-i18n="about.techStack">Tech Stack</h3>
+        <p data-i18n="about.builtWith">Built with TypeScript, Node.js, and vanilla web technologies. Wrapped in Electron for a native desktop experience.</p>
+        <p class="oss" data-i18n="about.license">Open Source under GPLv3 · <a href="https://github.com/OpenMinis/OpenMinis" target="_blank">GitHub</a></p>
       </div>
     </div>
   </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -866,6 +866,35 @@ body {
   margin-left: auto;
 }
 
+/* ===== General Settings (language) ===== */
+.settings-general {
+  padding-bottom: 28px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-general h2 {
+  margin-bottom: 16px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.setting-row label {
+  margin-bottom: 0;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.setting-row select {
+  width: auto;
+  min-width: 200px;
+}
+
 /* ===== Profile List (settings) ===== */
 .settings-header {
   display: flex;
