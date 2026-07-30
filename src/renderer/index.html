@@ -113,6 +113,44 @@
           </div>
         </div>
 
+        <!-- Soul -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.soul">Soul</h2>
+          <p class="setting-hint" data-i18n="settings.soulHint">Define your agent's persona.</p>
+          <div class="setting-group">
+            <textarea id="soulEditor" class="soul-editor" rows="5" data-i18n-placeholder="settings.soulPlaceholder"></textarea>
+          </div>
+          <div class="setting-row">
+            <button class="btn-primary btn-sm" id="soulSaveBtn" data-i18n="settings.save">Save</button>
+            <span id="soulStatus" class="setting-hint"></span>
+          </div>
+        </div>
+
+        <!-- Memory -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.memory">Memory</h2>
+          <div id="memoryInfo" class="storage-stats"></div>
+          <div id="memoryList" class="memory-list"></div>
+          <button class="btn-secondary btn-sm" id="clearMemoriesBtn" data-i18n="settings.clearMemories">Clear All Memories</button>
+        </div>
+
+        <!-- Storage -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.storage">Storage</h2>
+          <div id="storageStats" class="storage-stats"></div>
+          <button class="btn-secondary btn-sm" id="refreshStorageBtn" data-i18n="settings.refresh">Refresh</button>
+        </div>
+
+        <!-- Logs -->
+        <div class="settings-general">
+          <h2 data-i18n="settings.logs">Logs</h2>
+          <div class="logs-toolbar">
+            <button class="btn-secondary btn-sm" id="refreshLogsBtn" data-i18n="settings.refresh">Refresh</button>
+            <button class="btn-secondary btn-sm" id="clearLogsBtn" data-i18n="settings.clearLogs">Clear Logs</button>
+          </div>
+          <pre id="logsView" class="logs-view"></pre>
+        </div>
+
         <div class="settings-header">
           <h2 data-i18n="settings.aiModels">AI Models</h2>
           <button class="btn-primary btn-sm" onclick="showProfileEditor()" data-i18n="settings.addModel">+ Add Model</button>

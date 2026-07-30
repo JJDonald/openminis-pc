@@ -17,7 +17,17 @@ const MEMORY_DIR = path.join(WORKSPACE_DIR, '.minis-memory');
 const SETTINGS_FILE = path.join(WORKSPACE_DIR, '.minis-settings.json');
 const SESSIONS_FILE = path.join(WORKSPACE_DIR, '.minis-sessions.json');
 const SESSIONS_DIR = path.join(WORKSPACE_DIR, '.minis-sessions');
+const SOUL_FILE = path.join(WORKSPACE_DIR, '.minis-soul.md');
 const RENDERER_DIR = path.resolve(__dirname, '..', '..', 'src', 'renderer');
+
+// ---- Log buffer (in-memory ring buffer) ----
+const logBuffer: string[] = [];
+const MAX_LOGS = 500;
+function addLog(level: string, msg: string): void {
+  const entry = `[${new Date().toISOString()}] [${level}] ${msg}`;
+  logBuffer.push(entry);
+  if (logBuffer.length > MAX_LOGS) logBuffer.shift();
+}
 
 fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
 fs.mkdirSync(MEMORY_DIR, { recursive: true });
@@ -310,6 +320,7 @@ function createServer(): http.Server {
         store.activeSessionId = session.id;
         saveSessionStore(store);
         saveMessages(session.id, []);
+        addLog('info', `Session created: ${session.id}`);
         jsonReply(res, 200, { session });
         return;
       }
@@ -379,6 +390,7 @@ function createServer(): http.Server {
 
         // Cancel existing agent for this session, then create/reuse
         cancelSessionAgent(sessionId);
+        addLog('info', `Chat request: session=${sessionId} model=${profile.provider}/${profile.model}`);
         const agent = getOrCreateAgent(sessionId);
         if (!agent) {
           jsonReply(res, 400, { error: 'Failed to create agent.' });
@@ -426,11 +438,13 @@ function createServer(): http.Server {
           onError: (e) => {
             sendSSE(res, 'error', { message: e });
             res.end();
+            addLog('error', `Chat error (session=${sessionId}): ${e}`);
             // Save partial
             saveSessionMessages(sessionId, existingMessages, userMsg, assistantFullText, assistantToolCalls, lastUsage);
           },
           onDone: (sr) => {
             sendSSE(res, 'done', { stopReason: sr });
+            addLog('info', `Chat done (session=${sessionId}): ${sr}`);
             res.end();
             saveSessionMessages(sessionId, existingMessages, userMsg, assistantFullText, assistantToolCalls, lastUsage);
           },
@@ -571,6 +585,133 @@ function createServer(): http.Server {
       }
       jsonReply(res, 200, { ok: true });
       return;
+    }
+
+    // =====================================================================
+    // Memory API — list / clear memories (mirrors upstream Memory settings)
+    // =====================================================================
+    if (url.pathname === '/api/memory') {
+      if (req.method === 'GET') {
+        try {
+          const files = fs.existsSync(MEMORY_DIR)
+            ? fs.readdirSync(MEMORY_DIR).filter(f => f.endsWith('.md')).sort().reverse()
+            : [];
+          const entries = files.map(f => {
+            const fp = path.join(MEMORY_DIR, f);
+            const stat = fs.statSync(fp);
+            const content = fs.readFileSync(fp, 'utf-8');
+            const entryCount = (content.match(/^### /gm) || []).length;
+            return { file: f, size: stat.size, entries: entryCount, modified: stat.mtime.toISOString() };
+          });
+          const totalSize = entries.reduce((s, e) => s + e.size, 0);
+          jsonReply(res, 200, { entries, count: entries.length, totalSize });
+        } catch (err) {
+          jsonReply(res, 500, { error: (err as Error).message });
+        }
+        return;
+      }
+      if (req.method === 'DELETE') {
+        try {
+          if (fs.existsSync(MEMORY_DIR)) {
+            for (const f of fs.readdirSync(MEMORY_DIR)) {
+              if (f.endsWith('.md')) fs.unlinkSync(path.join(MEMORY_DIR, f));
+            }
+          }
+          addLog('info', 'All memories cleared');
+          jsonReply(res, 200, { ok: true });
+        } catch (err) {
+          jsonReply(res, 500, { error: (err as Error).message });
+        }
+        return;
+      }
+    }
+
+    // =====================================================================
+    // Soul API — read / write persona (mirrors upstream Soul settings)
+    // =====================================================================
+    if (url.pathname === '/api/soul') {
+      if (req.method === 'GET') {
+        try {
+          const content = fs.existsSync(SOUL_FILE)
+            ? fs.readFileSync(SOUL_FILE, 'utf-8')
+            : '';
+          jsonReply(res, 200, { content });
+        } catch (err) {
+          jsonReply(res, 500, { error: (err as Error).message });
+        }
+        return;
+      }
+      if (req.method === 'PUT') {
+        const body = await readBody(req);
+        try {
+          const { content } = JSON.parse(body);
+          fs.writeFileSync(SOUL_FILE, content || '', 'utf-8');
+          addLog('info', 'Soul/persona updated');
+          jsonReply(res, 200, { ok: true });
+        } catch (err) {
+          jsonReply(res, 400, { error: (err as Error).message });
+        }
+        return;
+      }
+    }
+
+    // =====================================================================
+    // Storage API — workspace stats (mirrors upstream Storage settings)
+    // =====================================================================
+    if (url.pathname === '/api/storage' && req.method === 'GET') {
+      try {
+        function dirSize(dir: string): number {
+          let size = 0;
+          try {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, entry.name);
+              if (entry.isDirectory()) size += dirSize(p);
+              else try { size += fs.statSync(p).size; } catch { /* skip */ }
+            }
+          } catch { /* skip */ }
+          return size;
+        }
+
+        const store = loadSessionStore();
+        let messageCount = 0;
+        for (const s of store.sessions) {
+          messageCount += loadMessages(s.id).length;
+        }
+
+        const memorySize = dirSize(MEMORY_DIR);
+        const sessionsSize = dirSize(SESSIONS_DIR);
+        const settingsSize = fs.existsSync(SETTINGS_FILE) ? fs.statSync(SETTINGS_FILE).size : 0;
+        const soulSize = fs.existsSync(SOUL_FILE) ? fs.statSync(SOUL_FILE).size : 0;
+
+        jsonReply(res, 200, {
+          sessions: store.sessions.length,
+          messages: messageCount,
+          memoryFiles: fs.existsSync(MEMORY_DIR) ? fs.readdirSync(MEMORY_DIR).filter(f => f.endsWith('.md')).length : 0,
+          memorySize,
+          sessionsSize,
+          settingsSize,
+          soulSize,
+          totalSize: memorySize + sessionsSize + settingsSize + soulSize,
+        });
+      } catch (err) {
+        jsonReply(res, 500, { error: (err as Error).message });
+      }
+      return;
+    }
+
+    // =====================================================================
+    // Logs API — view / clear logs (mirrors upstream Logs settings)
+    // =====================================================================
+    if (url.pathname === '/api/logs') {
+      if (req.method === 'GET') {
+        jsonReply(res, 200, { logs: logBuffer.slice().reverse(), count: logBuffer.length });
+        return;
+      }
+      if (req.method === 'DELETE') {
+        logBuffer.length = 0;
+        jsonReply(res, 200, { ok: true });
+        return;
+      }
     }
 
     serveStatic(req, res);

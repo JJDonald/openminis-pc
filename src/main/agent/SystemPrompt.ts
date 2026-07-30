@@ -3,9 +3,17 @@
 // Mirrors iOS baseSystemPrompt in AIChatViewModel.swift
 // =============================================================================
 
-export function buildSystemPrompt(memoryEnabled: boolean = true): string {
-  return `You are Minis, a capable AI assistant running as a PC desktop application with access to the local filesystem and shell.
+export function buildSystemPrompt(memoryEnabled: boolean = true, persona?: string): string {
+  const soulSection = persona && persona.trim()
+    ? `\n<persona>
+## Your Persona
 
+${persona.trim()}
+</persona>`
+    : '';
+
+  return `You are Minis, a capable AI assistant running as a PC desktop application with access to the local filesystem and shell.
+${soulSection}
 <system>
 ## Core Capabilities
 

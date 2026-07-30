@@ -914,6 +914,98 @@ body {
   min-width: 200px;
 }
 
+/* ===== Soul / Memory / Storage / Logs ===== */
+.soul-editor {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.soul-editor:focus {
+  border-color: var(--accent);
+}
+
+.memory-list {
+  margin: 12px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.memory-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.memory-file {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.memory-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.storage-stats {
+  margin: 12px 0;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.logs-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.logs-view {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 0.78rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
 /* ===== Profile List (settings) ===== */
 .settings-header {
   display: flex;

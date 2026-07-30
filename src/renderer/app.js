@@ -959,14 +959,135 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
 });
 
 // =============================================================================
+// Settings: Soul / Memory / Storage / Logs
+// (mirrors upstream OpenMinis settings categories)
+// =============================================================================
+
+// ---- Soul ----
+async function loadSoul() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/soul`);
+    const data = await resp.json();
+    const editor = document.getElementById('soulEditor');
+    if (editor) editor.value = data.content || '';
+    const status = document.getElementById('soulStatus');
+    if (status) status.textContent = '';
+  } catch (err) { console.error('Failed to load soul:', err); }
+}
+
+async function saveSoul() {
+  const editor = document.getElementById('soulEditor');
+  if (!editor) return;
+  try {
+    await fetch(`${API_BASE}/api/soul`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editor.value }),
+    });
+    const status = document.getElementById('soulStatus');
+    if (status) status.textContent = i18n.t('settings.soulSaved');
+  } catch (err) { console.error('Failed to save soul:', err); }
+}
+
+// ---- Memory ----
+async function loadMemory() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/memory`);
+    const data = await resp.json();
+    const info = document.getElementById('memoryInfo');
+    const list = document.getElementById('memoryList');
+    if (!info || !list) return;
+
+    if (data.count === 0) {
+      info.textContent = i18n.t('settings.noMemories');
+      list.innerHTML = '';
+      return;
+    }
+
+    info.textContent = i18n.t('settings.memoryCount', { n: data.count }) +
+      ' · ' + formatBytes(data.totalSize);
+    list.innerHTML = data.entries.map(e =>
+      `<div class="memory-item"><span class="memory-file">${escapeHtml(e.file)}</span>` +
+      `<span class="memory-meta">${e.entries} entries · ${formatBytes(e.size)}</span></div>`
+    ).join('');
+  } catch (err) { console.error('Failed to load memory:', err); }
+}
+
+async function clearMemories() {
+  if (!confirm(i18n.t('settings.clearMemoriesConfirm'))) return;
+  try {
+    await fetch(`${API_BASE}/api/memory`, { method: 'DELETE' });
+    loadMemory();
+  } catch (err) { console.error('Failed to clear memories:', err); }
+}
+
+// ---- Storage ----
+async function loadStorage() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/storage`);
+    const data = await resp.json();
+    const el = document.getElementById('storageStats');
+    if (!el) return;
+    el.innerHTML = [
+      statRow(i18n.t('settings.storageSessions'), data.sessions),
+      statRow(i18n.t('settings.storageMessages'), data.messages),
+      statRow(i18n.t('settings.storageMemory'), data.memoryFiles),
+      statRow(i18n.t('settings.storageTotal'), formatBytes(data.totalSize)),
+    ].join('');
+  } catch (err) { console.error('Failed to load storage:', err); }
+}
+
+// ---- Logs ----
+async function loadLogs() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/logs`);
+    const data = await resp.json();
+    const el = document.getElementById('logsView');
+    if (!el) return;
+    el.textContent = data.logs.length > 0
+      ? data.logs.join('\n')
+      : i18n.t('settings.noLogs');
+  } catch (err) { console.error('Failed to load logs:', err); }
+}
+
+async function clearLogs() {
+  try {
+    await fetch(`${API_BASE}/api/logs`, { method: 'DELETE' });
+    loadLogs();
+  } catch (err) { console.error('Failed to clear logs:', err); }
+}
+
+// ---- Helpers ----
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+function statRow(label, value) {
+  return `<div class="stat-row"><span class="stat-label">${escapeHtml(String(label))}</span>` +
+    `<span class="stat-value">${escapeHtml(String(value))}</span></div>`;
+}
+
+// Load all settings-panel data
+function loadAllSettings() {
+  loadSoul();
+  loadMemory();
+  loadStorage();
+  loadLogs();
+}
+
+// =============================================================================
 // Initialize
 // =============================================================================
 
-// When entering settings view, refresh the list
+// When entering settings view, refresh all panels
 const settingsBtn = document.querySelector('[data-view="settings"]');
 if (settingsBtn) {
   settingsBtn.addEventListener('click', () => {
     renderProfileList();
+    loadAllSettings();
   });
 }
 
@@ -997,6 +1118,24 @@ async function init() {
     });
   }
 
+  // Soul editor
+  const soulSaveBtn = document.getElementById('soulSaveBtn');
+  if (soulSaveBtn) soulSaveBtn.addEventListener('click', saveSoul);
+
+  // Memory management
+  const clearMemBtn = document.getElementById('clearMemoriesBtn');
+  if (clearMemBtn) clearMemBtn.addEventListener('click', clearMemories);
+
+  // Storage
+  const refreshStorageBtn = document.getElementById('refreshStorageBtn');
+  if (refreshStorageBtn) refreshStorageBtn.addEventListener('click', loadStorage);
+
+  // Logs
+  const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+  if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', loadLogs);
+  const clearLogsBtn = document.getElementById('clearLogsBtn');
+  if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
+
   // Re-render dynamic content when language changes
   i18n.onChange(() => {
     // Re-render welcome if visible
@@ -1007,6 +1146,7 @@ async function init() {
     // Re-render profile list if in settings view
     if (document.getElementById('view-settings').classList.contains('active')) {
       renderProfileList();
+      loadAllSettings();
     }
     // Update model selector placeholder
     if (profilesCache.length === 0) refreshModelSelector();

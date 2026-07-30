@@ -13,6 +13,8 @@ import {
   ToolExecutionResult,
   LLMUsage,
 } from '../providers/types';
+import * as fs from 'fs';
+import * as path from 'path';
 import { LLMProvider } from '../providers/ProviderFactory';
 import { ShellExecutor, FileTools, MemoryTools, BrowserFetch } from '../tools/ToolExecutors';
 import { buildSystemPrompt } from './SystemPrompt';
@@ -74,7 +76,14 @@ export class AgentLoop {
     };
     this.agentHistory.push(userMsg);
 
-    const systemPrompt = buildSystemPrompt(this.config.memoryEnabled);
+    // Read soul/persona file fresh each run so edits take effect immediately
+    let persona: string | undefined;
+    try {
+      const soulPath = path.join(this.config.workspaceDir, '.minis-soul.md');
+      persona = fs.readFileSync(soulPath, 'utf-8');
+    } catch { /* no soul file */ }
+
+    const systemPrompt = buildSystemPrompt(this.config.memoryEnabled, persona);
     let turnCount = 0;
 
     while (turnCount < MAX_AGENT_TURNS && !this.isCancelled) {

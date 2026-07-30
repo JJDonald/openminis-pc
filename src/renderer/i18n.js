@@ -69,6 +69,32 @@ const TRANSLATIONS = {
     'settings.themeDark': 'Dark',
     'settings.themeLight': 'Light',
 
+    // Settings - Memory
+    'settings.memory': 'Memory',
+    'settings.memoryCount': '{n} memory files',
+    'settings.noMemories': 'No memories yet',
+    'settings.clearMemories': 'Clear All Memories',
+    'settings.clearMemoriesConfirm': 'Delete all memory files? This cannot be undone.',
+
+    // Settings - Soul
+    'settings.soul': 'Soul',
+    'settings.soulHint': "Define your agent's persona. This text is injected into the system prompt.",
+    'settings.soulPlaceholder': 'e.g. You are a helpful coding assistant that explains things clearly.',
+    'settings.soulSaved': 'Persona saved!',
+
+    // Settings - Storage
+    'settings.storage': 'Storage',
+    'settings.storageSessions': 'Sessions',
+    'settings.storageMessages': 'Messages',
+    'settings.storageMemory': 'Memory files',
+    'settings.storageTotal': 'Total used',
+
+    // Settings - Logs
+    'settings.logs': 'Logs',
+    'settings.clearLogs': 'Clear Logs',
+    'settings.noLogs': 'No logs yet',
+    'settings.refresh': 'Refresh',
+
     // Settings - Models
     'settings.aiModels': 'AI Models',
     'settings.addModel': '+ Add Model',
@@ -174,6 +200,32 @@ const TRANSLATIONS = {
     'settings.theme': '主题',
     'settings.themeDark': '深色',
     'settings.themeLight': '浅色',
+
+    // 设置 - 记忆
+    'settings.memory': '记忆',
+    'settings.memoryCount': '{n} 个记忆文件',
+    'settings.noMemories': '暂无记忆',
+    'settings.clearMemories': '清空全部记忆',
+    'settings.clearMemoriesConfirm': '确定删除所有记忆文件吗？此操作不可撤销。',
+
+    // 设置 - 灵魂
+    'settings.soul': '灵魂',
+    'settings.soulHint': '定义你的智能体人格。这段文字会注入到系统提示词中。',
+    'settings.soulPlaceholder': '例如：你是一个乐于助人的编程助手，讲解清晰易懂。',
+    'settings.soulSaved': '人格已保存！',
+
+    // 设置 - 存储
+    'settings.storage': '存储',
+    'settings.storageSessions': '会话',
+    'settings.storageMessages': '消息',
+    'settings.storageMemory': '记忆文件',
+    'settings.storageTotal': '总占用',
+
+    // 设置 - 日志
+    'settings.logs': '日志',
+    'settings.clearLogs': '清空日志',
+    'settings.noLogs': '暂无日志',
+    'settings.refresh': '刷新',
 
     // 设置 - 模型
     'settings.aiModels': 'AI 模型',
