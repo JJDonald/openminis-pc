@@ -21,8 +21,24 @@ console.log('Output:', DIST);
 const releaseRoot = path.join(ROOT, 'release');
 if (fs.existsSync(releaseRoot)) {
   const backupRoot = `${releaseRoot}-previous-${Date.now()}`;
-  fs.renameSync(releaseRoot, backupRoot);
-  console.log('Previous release preserved at:', backupRoot);
+  try {
+    fs.renameSync(releaseRoot, backupRoot);
+    console.log('Previous release preserved at:', backupRoot);
+  } catch (renameErr) {
+    // Some sandboxes/AVs block a direct rename of a large directory.
+    // Fall back to PowerShell Move-Item, which uses a different code path.
+    try {
+      execSync(
+        `powershell -NoProfile -Command "Move-Item -LiteralPath '${releaseRoot}' -Destination '${backupRoot}' -Force"`,
+        { stdio: 'pipe' }
+      );
+      console.log('Previous release preserved at:', backupRoot, '(via PowerShell)');
+    } catch (psErr) {
+      console.error('Could not move previous release:', renameErr.message);
+      console.error('PowerShell fallback also failed:', psErr.message);
+      process.exit(1);
+    }
+  }
 }
 
 // Create directories
