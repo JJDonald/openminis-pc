@@ -16,9 +16,13 @@ console.log('Root:', ROOT);
 console.log('Electron:', ELECTRON_SRC);
 console.log('Output:', DIST);
 
-// Clean
-if (fs.existsSync(path.join(ROOT, 'release'))) {
-  fs.rmSync(path.join(ROOT, 'release'), { recursive: true, force: true });
+// Build into a fresh release directory. If a previous build exists, use a unique
+// output directory so no bulk deletion of the Electron runtime is required.
+const releaseRoot = path.join(ROOT, 'release');
+if (fs.existsSync(releaseRoot)) {
+  const backupRoot = `${releaseRoot}-previous-${Date.now()}`;
+  fs.renameSync(releaseRoot, backupRoot);
+  console.log('Previous release preserved at:', backupRoot);
 }
 
 // Create directories
