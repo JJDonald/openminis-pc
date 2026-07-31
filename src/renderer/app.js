@@ -36,7 +36,10 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
     document.getElementById(`view-${view}`).classList.add('active');
 
     if (view === 'settings') {
-      loadSettings();
+      // Refresh every settings panel when the view becomes active.
+      // Keep this call aligned with the actual settings loaders below.
+      renderProfileList();
+      loadAllSettings();
     }
   });
 });
@@ -1308,14 +1311,7 @@ function loadAllSettings() {
 // Initialize
 // =============================================================================
 
-// When entering settings view, refresh all panels
-const settingsBtn = document.querySelector('[data-view="settings"]');
-if (settingsBtn) {
-  settingsBtn.addEventListener('click', () => {
-    renderProfileList();
-    loadAllSettings();
-  });
-}
+// Settings are refreshed by the navigation handler above.
 
 // Start
 async function init() {
