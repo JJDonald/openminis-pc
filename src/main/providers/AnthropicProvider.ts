@@ -63,6 +63,7 @@ export class AnthropicProvider {
     let buffer = '';
     let currentToolId: string | null = null;
     let currentToolName: string | null = null;
+    let currentToolArgs = '';
     let inputTokens = 0;
     let outputTokens = 0;
 
@@ -103,6 +104,7 @@ export class AnthropicProvider {
                 } else if (block.type === 'tool_use') {
                   currentToolId = block.id;
                   currentToolName = block.name;
+                  currentToolArgs = '';
                   yield { type: 'contentBlockStart', block: { type: 'toolUse', id: block.id, name: block.name } };
                 }
                 break;
@@ -113,7 +115,8 @@ export class AnthropicProvider {
                 if (delta.type === 'text_delta') {
                   yield { type: 'textDelta', text: delta.text };
                 } else if (delta.type === 'input_json_delta') {
-                  yield { type: 'toolInputDelta', name: currentToolName || '', accumulated: delta.partial_json };
+                  currentToolArgs += delta.partial_json || '';
+                  yield { type: 'toolInputDelta', name: currentToolName || '', accumulated: currentToolArgs };
                 } else if (delta.type === 'thinking_delta') {
                   yield { type: 'thinkingDelta', text: delta.thinking };
                 }
@@ -121,7 +124,14 @@ export class AnthropicProvider {
               }
 
               case 'content_block_stop': {
-                // Content block complete — tool call will be finalized in message_delta
+                if (currentToolId && currentToolName) {
+                  let args: Record<string, unknown> = {};
+                  try { args = JSON.parse(currentToolArgs || '{}'); } catch { /* provider may send incomplete JSON */ }
+                  yield { type: 'toolCallComplete', id: currentToolId, name: currentToolName, args };
+                  currentToolId = null;
+                  currentToolName = null;
+                  currentToolArgs = '';
+                }
                 break;
               }
 
