@@ -77,6 +77,12 @@ fs.writeFileSync(path.join(APP, 'package.json'), JSON.stringify(appPkg, null, 2)
 // electron-entry.js
 fs.copyFileSync(path.join(ROOT, 'electron-entry.js'), path.join(APP, 'electron-entry.js'));
 
+// preload.js (renderer <-> main bridge for theme-aware titlebar)
+if (fs.existsSync(path.join(ROOT, 'preload.js'))) {
+  fs.copyFileSync(path.join(ROOT, 'preload.js'), path.join(APP, 'preload.js'));
+  console.log('  Copied preload.js');
+}
+
 // dist (compiled TypeScript)
 copyDir(path.join(ROOT, 'dist'), path.join(APP, 'dist'));
 

@@ -973,6 +973,11 @@ function resolveAutoLanguage() {
 function applyTheme(pref) {
   const resolved = pref === 'auto' ? resolveAutoTheme() : pref;
   document.documentElement.setAttribute('data-theme', resolved);
+  // Keep the native window-control overlay colors aligned with the theme
+  // (no-op in a plain browser, active inside Electron via preload.js).
+  if (window.desktop && typeof window.desktop.setTheme === 'function') {
+    window.desktop.setTheme(resolved);
+  }
 }
 
 function getThemePreference() {

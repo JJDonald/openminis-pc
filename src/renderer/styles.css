@@ -23,6 +23,10 @@
   --radius-sm: 10px;
   --shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
   --font-size-base: 15px;
+  /* Custom titlebar: --titlebar-height must match titleBarOverlay.height in electron-entry.js */
+  --titlebar-height: 40px;
+  --sidebar-width: 256px;
+  --sidebar-bg: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
 }
 
 /* Light theme — mirrors upstream OpenMinis Appearance > Light */
@@ -67,14 +71,58 @@ body {
   height: 100vh;
 }
 
+/* ===== Custom Window Titlebar =====
+   Fixed strip at the top of the window. Transparent-looking by design:
+   the left segment reuses the sidebar background and the right segment
+   reuses the main background, so it always matches the active theme.
+   The native window controls (min/max/close) are drawn by the OS overlay
+   on the right side; their colors are updated via IPC (see preload.js). */
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: stretch;
+  z-index: 1000;
+  -webkit-app-region: drag;
+  user-select: none;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.titlebar-side {
+  width: var(--sidebar-width);
+  background: var(--sidebar-bg);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-right: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+.titlebar-brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.titlebar-main {
+  flex: 1;
+  background: var(--bg-primary);
+}
+
 /* Sidebar */
 .sidebar {
-  width: 256px;
-  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  width: var(--sidebar-width);
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--divider);
   display: flex;
   flex-direction: column;
-  padding: 22px 14px 14px;
+  /* Extra top padding leaves room for the custom titlebar strip */
+  padding: calc(var(--titlebar-height) + 22px) 14px 14px;
   flex-shrink: 0;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -419,6 +467,8 @@ body {
   display: none;
   flex: 1;
   overflow: hidden;
+  /* Leave room for the custom titlebar strip */
+  padding-top: var(--titlebar-height);
 }
 
 .view.active {
@@ -1266,14 +1316,15 @@ body {
 }
 
 @media (max-width: 760px) {
-  .sidebar { width: 208px; }
+  :root { --sidebar-width: 208px; }
   .chat-messages { padding: 26px 22px 20px; }
   .chat-input-area { padding: 12px 22px 18px; }
   .settings-container, .about-container { padding: 28px 18px 56px; }
 }
 
 @media (max-width: 560px) {
-  .sidebar { width: 68px; padding: 18px 8px 10px; }
+  :root { --sidebar-width: 68px; }
+  .sidebar { padding: calc(var(--titlebar-height) + 18px) 8px 10px; }
   .sidebar-header { padding: 0; text-align: center; }
   .sidebar-header h1 { font-size: 0; }
   .sidebar-header h1::after { content: 'M'; font-size: 1.25rem; }

@@ -49,10 +49,17 @@ function startBackendServer() {
   });
 }
 
+// ---- Window Theme Colors (aligned with src/renderer/styles.css) ----
+const THEME_COLORS = {
+  dark: { color: '#101114', symbolColor: '#f5f5f7' },
+  light: { color: '#f2f2f7', symbolColor: '#1c1c1e' },
+};
+
 // ---- Create Window ----
 function createWindow() {
   console.log('[OpenMinis] Creating window...');
 
+  const darkColors = THEME_COLORS.dark;
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -60,12 +67,34 @@ function createWindow() {
     minHeight: 600,
     title: 'OpenMinis',
     icon: path.join(__dirname, 'resources', 'icon.png'),
-    backgroundColor: '#1a1a2e',
+    backgroundColor: darkColors.color,
     show: false,
+    // Custom titlebar so the window top matches the app theme.
+    // The window controls are drawn by the OS inside the overlay and are
+    // repainted via setTitleBarOverlay when the renderer theme changes.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: darkColors.color,
+      symbolColor: darkColors.symbolColor,
+      height: 40,
+    },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
+  });
+
+  // Repaint the window-control overlay when the renderer theme changes.
+  mainWindow.webContents.on('ipc-message', (_event, channel, theme) => {
+    if (channel === 'theme-changed' && mainWindow) {
+      const colors = THEME_COLORS[theme === 'light' ? 'light' : 'dark'];
+      try {
+        mainWindow.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor });
+      } catch (err) {
+        console.error('[OpenMinis] setTitleBarOverlay failed:', err.message);
+      }
+    }
   });
 
   // Remove default menu
