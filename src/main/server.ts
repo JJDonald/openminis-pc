@@ -564,7 +564,9 @@ function createServer(): http.Server {
           saveSettings(s);
           resetAllAgents();
           jsonReply(res, 200, { ok: true, profile: { ...profile, apiKey: maskKey(profile.apiKey) } });
-        } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
+        } catch (err: unknown) {
+          jsonReply(res, 400, { error: (err as Error).message || 'Invalid JSON' });
+        }
         return;
       }
 

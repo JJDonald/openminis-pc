@@ -6,12 +6,10 @@
 import {
   AgentMessage,
   AgentContentPart,
-  AgentStreamEvent,
   AgentStopReason,
   AgentToolDefinition,
   AgentLoopCallbacks,
   ToolExecutionResult,
-  LLMUsage,
 } from '../providers/types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -42,7 +40,6 @@ export class AgentLoop {
   private mcp: MCPManager;
   private agentHistory: AgentMessage[] = [];
   private isCancelled = false;
-  private callbacks: AgentLoopCallbacks | null = null;
 
   constructor(config: AgentLoopConfig) {
     this.config = config;
@@ -72,7 +69,6 @@ export class AgentLoop {
     tools: AgentToolDefinition[],
     callbacks: AgentLoopCallbacks,
   ): Promise<void> {
-    this.callbacks = callbacks;
     this.isCancelled = false;
 
     // Add user message to history
@@ -107,7 +103,6 @@ export class AgentLoop {
         let assistantText = '';
         const toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
         let stopReason: AgentStopReason = 'endTurn';
-        let usage: LLMUsage | undefined;
 
         const stream = this.config.provider.streamMessage(
           messages,
@@ -152,7 +147,6 @@ export class AgentLoop {
               break;
 
             case 'usage':
-              usage = event.usage;
               callbacks.onUsage(event.usage);
               break;
 
@@ -182,8 +176,10 @@ export class AgentLoop {
         };
         this.agentHistory.push(assistantMsg);
 
-        // If no tool calls, we're done
-        if (toolCalls.length === 0 || stopReason === 'endTurn') {
+        // If no tool calls, we're done.
+        // Note: some providers (e.g. Gemini) report a normal stop reason even
+        // when they emitted function calls, so we must only check toolCalls here.
+        if (toolCalls.length === 0) {
           callbacks.onDone(stopReason);
           return;
         }

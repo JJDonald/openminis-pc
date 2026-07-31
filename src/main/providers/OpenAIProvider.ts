@@ -4,7 +4,7 @@
 // Uses OpenAI Chat Completions API with SSE streaming + tool calls
 // =============================================================================
 
-import { AgentMessage, AgentToolDefinition, AgentStreamEvent, AgentStopReason, LLMUsage, ProviderConfig } from './types';
+import { AgentMessage, AgentToolDefinition, AgentStreamEvent, AgentStopReason, ProviderConfig } from './types';
 
 export class OpenAIProvider {
   readonly name: string;
@@ -67,15 +67,27 @@ export class OpenAIProvider {
 
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentToolId: string | null = null;
-    let currentToolName: string | null = null;
-    let currentToolArgs = '';
     let inputTokens = 0;
     let outputTokens = 0;
     let startedText = false;
 
     // Track tool calls by index
     const toolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
+
+    // Build toolCallComplete events for every collected tool call. Called on
+    // finish_reason AND on [DONE] so a stream that ends without an explicit
+    // finish_reason still finalizes its tool calls.
+    function collectToolCalls(): AgentStreamEvent[] {
+      const events: AgentStreamEvent[] = [];
+      for (const [, entry] of toolCalls) {
+        if (entry.id && entry.name) {
+          let args: Record<string, unknown> = {};
+          try { args = JSON.parse(entry.args); } catch { /* partial JSON */ }
+          events.push({ type: 'toolCallComplete', id: entry.id, name: entry.name, args });
+        }
+      }
+      return events;
+    }
 
     try {
       while (true) {
@@ -91,6 +103,8 @@ export class OpenAIProvider {
           if (!trimmed || !trimmed.startsWith('data: ')) continue;
           const data = trimmed.slice(6);
           if (data === '[DONE]') {
+            // Finalize any pending tool calls before ending the stream.
+            for (const e of collectToolCalls()) yield e;
             yield { type: 'done', stopReason: 'endTurn' as AgentStopReason };
             return;
           }
@@ -132,13 +146,7 @@ export class OpenAIProvider {
             if (choice.finish_reason) {
               if (choice.finish_reason === 'tool_calls') {
                 // Emit toolCallComplete for each completed tool call
-                for (const [, entry] of toolCalls) {
-                  if (entry.id && entry.name) {
-                    let args: Record<string, unknown> = {};
-                    try { args = JSON.parse(entry.args); } catch { /* partial JSON */ }
-                    yield { type: 'toolCallComplete', id: entry.id, name: entry.name, args };
-                  }
-                }
+                for (const e of collectToolCalls()) yield e;
               }
 
               // Check usage

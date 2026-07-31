@@ -4,7 +4,7 @@
 // Uses Google Gemini API with SSE streaming
 // =============================================================================
 
-import { AgentMessage, AgentToolDefinition, AgentStreamEvent, AgentStopReason, LLMUsage, ProviderConfig } from './types';
+import { AgentMessage, AgentToolDefinition, AgentStreamEvent, AgentStopReason, ProviderConfig } from './types';
 
 export class GeminiProvider {
   readonly name: string = 'gemini';
