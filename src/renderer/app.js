@@ -884,6 +884,22 @@ function hideProfileEditor() {
   document.getElementById('profileEditorOverlay').style.display = 'none';
 }
 
+async function testProfile() {
+  const id = document.getElementById('profileEditorId').value;
+  if (!id) { alert(i18n.t('profile.modelIdRequired')); return; }
+  const button = document.getElementById('testProfileBtn');
+  if (button) { button.disabled = true; button.textContent = i18n.t('settings.testing'); }
+  try {
+    const response = await fetch(`${API_BASE}/api/profiles/${encodeURIComponent(id)}/test`, { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Connection failed');
+    alert(i18n.t('settings.connectionPassed'));
+  } catch (err) { alert(err.message); }
+  finally {
+    if (button) { button.disabled = false; button.textContent = i18n.t('settings.testConnection'); }
+  }
+}
+
 function editProfile(id) {
   const p = profilesCache.find(p => p.id === id);
   if (p) showProfileEditor(p);
@@ -901,23 +917,26 @@ function updateEditorPlaceholders() {
 
 async function saveProfile() {
   const id = document.getElementById('profileEditorId').value;
+  const apiKey = document.getElementById('profileEditorApiKey').value.trim();
   const profile = {
     id: id || undefined,
     name: document.getElementById('profileEditorName').value.trim(),
     provider: document.getElementById('profileEditorProvider').value,
     model: document.getElementById('profileEditorModel').value.trim(),
-    apiKey: document.getElementById('profileEditorApiKey').value.trim(),
+    ...(apiKey ? { apiKey } : {}),
     baseURL: document.getElementById('profileEditorBaseURL').value.trim(),
   };
 
   if (!profile.name) profile.name = profile.model || i18n.t('profile.unnamed');
   if (!profile.model) { alert(i18n.t('profile.modelIdRequired')); return; }
 
-  await fetch(`${API_BASE}/api/profiles`, {
+  const response = await fetch(`${API_BASE}/api/profiles`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile),
   });
+  const data = await response.json();
+  if (!response.ok) { alert(data.error || 'Failed to save model'); return; }
 
   hideProfileEditor();
   renderProfileList();
@@ -944,6 +963,10 @@ function resolveAutoTheme() {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
+function resolveAutoLanguage() {
+  return (navigator.languages || [navigator.language || 'en']).some(lang => lang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
+}
+
 function applyTheme(pref) {
   const resolved = pref === 'auto' ? resolveAutoTheme() : pref;
   document.documentElement.setAttribute('data-theme', resolved);
@@ -956,6 +979,13 @@ function getThemePreference() {
 // React to system theme changes when in 'auto' mode
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
   if (getThemePreference() === 'auto') applyTheme('auto');
+});
+
+// Re-apply system language when following the system locale.
+window.addEventListener('languagechange', () => {
+  if (i18n.getLangPreference() === 'auto' && resolveAutoLanguage() !== i18n.getLang()) {
+    i18n.setLang('auto');
+  }
 });
 
 // =============================================================================
@@ -979,14 +1009,15 @@ async function saveSoul() {
   const editor = document.getElementById('soulEditor');
   if (!editor) return;
   try {
-    await fetch(`${API_BASE}/api/soul`, {
+    const response = await fetch(`${API_BASE}/api/soul`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: editor.value }),
     });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to save persona');
     const status = document.getElementById('soulStatus');
     if (status) status.textContent = i18n.t('settings.soulSaved');
-  } catch (err) { console.error('Failed to save soul:', err); }
+  } catch (err) { alert(err.message); }
 }
 
 // ---- Memory ----
@@ -1016,9 +1047,10 @@ async function loadMemory() {
 async function clearMemories() {
   if (!confirm(i18n.t('settings.clearMemoriesConfirm'))) return;
   try {
-    await fetch(`${API_BASE}/api/memory`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE}/api/memory`, { method: 'DELETE' });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to clear memories');
     loadMemory();
-  } catch (err) { console.error('Failed to clear memories:', err); }
+  } catch (err) { alert(err.message); }
 }
 
 // ---- Skills ----
@@ -1050,10 +1082,13 @@ async function loadSkills() {
 }
 
 async function toggleSkill(id, enabled) {
-  await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}/enabled`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
-  });
-  loadSkills();
+  try {
+    const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}/enabled`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to update skill');
+    loadSkills();
+  } catch (err) { alert(err.message); loadSkills(); }
 }
 
 function showSkillEditor(skill) {
@@ -1082,8 +1117,11 @@ async function saveSkill() {
 }
 async function deleteSkill(id) {
   if (!confirm(i18n.t('settings.deleteConfirm'))) return;
-  await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  loadSkills();
+  try {
+    const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to delete skill');
+    loadSkills();
+  } catch (err) { alert(err.message); }
 }
 
 // ---- MCP Plugins ----
@@ -1117,10 +1155,13 @@ async function loadMcpServers() {
 }
 
 async function toggleMcp(id, enabled) {
-  await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/enabled`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
-  });
-  loadMcpServers();
+  try {
+    const response = await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/enabled`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to update plugin');
+    loadMcpServers();
+  } catch (err) { alert(err.message); loadMcpServers(); }
 }
 
 function updateMcpFields() {
@@ -1173,22 +1214,32 @@ async function inspectMcp(id) {
   const status = document.getElementById(`mcp-status-${id}`);
   const tools = document.getElementById(`mcp-tools-${id}`);
   if (status) { status.textContent = i18n.t('sidebar.processing'); status.className = 'extension-status'; }
-  const data = await (await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/inspect`)).json();
-  if (status) {
-    status.textContent = i18n.t(data.status === 'connected' ? 'settings.connected' : 'settings.disconnected');
-    status.className = `extension-status ${data.status === 'connected' ? 'connected' : 'error'}`;
-  }
-  if (tools) {
-    tools.style.display = '';
-    tools.textContent = data.status === 'connected'
-      ? i18n.t('settings.toolsCount', { n: data.tools.length }) + (data.tools.length ? ': ' + data.tools.map(t => t.name).join(', ') : '')
-      : (data.error || 'Connection failed');
+  try {
+    const response = await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}/inspect`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Connection failed');
+    if (status) {
+      status.textContent = i18n.t(data.status === 'connected' ? 'settings.connected' : 'settings.disconnected');
+      status.className = `extension-status ${data.status === 'connected' ? 'connected' : 'error'}`;
+    }
+    if (tools) {
+      tools.style.display = '';
+      tools.textContent = data.status === 'connected'
+        ? i18n.t('settings.toolsCount', { n: data.tools.length }) + (data.tools.length ? ': ' + data.tools.map(t => t.name).join(', ') : '')
+        : (data.error || 'Connection failed');
+    }
+  } catch (err) {
+    if (status) { status.textContent = i18n.t('settings.disconnected'); status.className = 'extension-status error'; }
+    if (tools) { tools.style.display = ''; tools.textContent = err.message; }
   }
 }
 async function deleteMcp(id) {
   if (!confirm(i18n.t('settings.deleteConfirm'))) return;
-  await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  loadMcpServers();
+  try {
+    const response = await fetch(`${API_BASE}/api/mcp/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to delete plugin');
+    loadMcpServers();
+  } catch (err) { alert(err.message); }
 }
 
 // ---- Storage ----
@@ -1202,6 +1253,8 @@ async function loadStorage() {
       statRow(i18n.t('settings.storageSessions'), data.sessions),
       statRow(i18n.t('settings.storageMessages'), data.messages),
       statRow(i18n.t('settings.storageMemory'), data.memoryFiles),
+      statRow(i18n.t('settings.storageSkills'), data.skills || 0),
+      statRow(i18n.t('settings.storageMcp'), data.mcpServers || 0),
       statRow(i18n.t('settings.storageTotal'), formatBytes(data.totalSize)),
     ].join('');
   } catch (err) { console.error('Failed to load storage:', err); }
@@ -1222,9 +1275,10 @@ async function loadLogs() {
 
 async function clearLogs() {
   try {
-    await fetch(`${API_BASE}/api/logs`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE}/api/logs`, { method: 'DELETE' });
+    if (!response.ok) throw new Error((await response.json()).error || 'Failed to clear logs');
     loadLogs();
-  } catch (err) { console.error('Failed to clear logs:', err); }
+  } catch (err) { alert(err.message); }
 }
 
 // ---- Helpers ----
@@ -1293,6 +1347,8 @@ async function init() {
   // Soul editor
   const soulSaveBtn = document.getElementById('soulSaveBtn');
   if (soulSaveBtn) soulSaveBtn.addEventListener('click', saveSoul);
+  const testProfileBtn = document.getElementById('testProfileBtn');
+  if (testProfileBtn) testProfileBtn.addEventListener('click', testProfile);
 
   // Memory management
   const clearMemBtn = document.getElementById('clearMemoriesBtn');

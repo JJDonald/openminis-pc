@@ -20,15 +20,26 @@ const SETTINGS_FILE = path.join(WORKSPACE_DIR, '.minis-settings.json');
 const SESSIONS_FILE = path.join(WORKSPACE_DIR, '.minis-sessions.json');
 const SESSIONS_DIR = path.join(WORKSPACE_DIR, '.minis-sessions');
 const SOUL_FILE = path.join(WORKSPACE_DIR, '.minis-soul.md');
+const LOGS_FILE = path.join(WORKSPACE_DIR, '.minis-logs.json');
 const RENDERER_DIR = path.resolve(__dirname, '..', '..', 'src', 'renderer');
 
-// ---- Log buffer (in-memory ring buffer) ----
-const logBuffer: string[] = [];
+// ---- Log buffer (persistent ring buffer) ----
 const MAX_LOGS = 500;
+function loadLogBuffer(): string[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf-8'));
+    return Array.isArray(parsed) ? parsed.slice(-MAX_LOGS).map(String) : [];
+  } catch { return []; }
+}
+const logBuffer: string[] = loadLogBuffer();
+function persistLogs(): void {
+  try { fs.writeFileSync(LOGS_FILE, JSON.stringify(logBuffer, null, 2), 'utf-8'); } catch { /* logging must not break the app */ }
+}
 function addLog(level: string, msg: string): void {
   const entry = `[${new Date().toISOString()}] [${level}] ${msg}`;
   logBuffer.push(entry);
-  if (logBuffer.length > MAX_LOGS) logBuffer.shift();
+  if (logBuffer.length > MAX_LOGS) logBuffer.splice(0, logBuffer.length - MAX_LOGS);
+  persistLogs();
 }
 
 fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
@@ -179,6 +190,41 @@ function cancelSessionAgent(sessionId: string): void {
     agent.cancel();
     agentCache.delete(sessionId);
   }
+}
+
+function resetAllAgents(): void {
+  for (const sessionId of Array.from(agentCache.keys())) cancelSessionAgent(sessionId);
+}
+
+async function testProfileConnection(profile: ModelProfile): Promise<void> {
+  if (!profile.apiKey) throw new Error('API key is required');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    let url: string;
+    let body: Record<string, unknown>;
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (profile.provider === 'anthropic') {
+      url = `${(profile.baseURL || 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/messages`;
+      headers = { ...headers, 'x-api-key': profile.apiKey, 'anthropic-version': '2023-06-01' };
+      body = { model: profile.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] };
+    } else if (profile.provider === 'gemini') {
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(profile.model)}:generateContent?key=${encodeURIComponent(profile.apiKey)}`;
+      body = { contents: [{ role: 'user', parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 1 } };
+    } else {
+      let base = profile.baseURL || (profile.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : profile.provider === 'deepseek' ? 'https://api.deepseek.com/v1' : profile.provider === 'xai' ? 'https://api.x.ai/v1' : 'https://api.openai.com');
+      base = base.replace(/\/+$/, '');
+      if (!base.endsWith('/v1')) base += '/v1';
+      url = `${base}/chat/completions`;
+      headers = { ...headers, Authorization: `Bearer ${profile.apiKey}` };
+      body = { model: profile.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] };
+    }
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+    if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') throw new Error('Connection timed out');
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 
 // Helper: persist chat messages after a turn
@@ -393,8 +439,8 @@ function createServer(): http.Server {
           return;
         }
 
-        // Cancel existing agent for this session, then create/reuse
-        cancelSessionAgent(sessionId);
+        // Reuse the per-session agent so conversation history survives across turns.
+        // The explicit cancel endpoint remains available for user cancellation.
         addLog('info', `Chat request: session=${sessionId} model=${profile.provider}/${profile.model}`);
         const agent = getOrCreateAgent(sessionId);
         if (!agent) {
@@ -497,15 +543,26 @@ function createServer(): http.Server {
       if (req.method === 'POST') {
         const body = await readBody(req);
         try {
-          const profile: ModelProfile = JSON.parse(body);
-          if (!profile.id) profile.id = 'p_' + Date.now();
-          if (!profile.name) profile.name = profile.model || 'Unnamed';
+          const incoming = JSON.parse(body) as Partial<ModelProfile>;
           const s = loadSettings();
+          if (!incoming.id) incoming.id = 'p_' + Date.now();
+          const existing = s.profiles.find(p => p.id === incoming.id);
+          const profile: ModelProfile = {
+            id: incoming.id,
+            name: incoming.name || incoming.model || existing?.name || 'Unnamed',
+            provider: incoming.provider || existing?.provider || 'openai',
+            model: incoming.model || existing?.model || '',
+            apiKey: incoming.apiKey || existing?.apiKey || '',
+            baseURL: incoming.baseURL !== undefined ? incoming.baseURL : (existing?.baseURL || ''),
+          };
+          if (!profile.model) throw new Error('Model is required');
+          if (!profile.apiKey) throw new Error('API key is required for a new model');
           const idx = s.profiles.findIndex(p => p.id === profile.id);
           if (idx >= 0) s.profiles[idx] = profile;
           else s.profiles.push(profile);
           if (!s.activeProfileId) s.activeProfileId = profile.id;
           saveSettings(s);
+          resetAllAgents();
           jsonReply(res, 200, { ok: true, profile: { ...profile, apiKey: maskKey(profile.apiKey) } });
         } catch { jsonReply(res, 400, { error: 'Invalid JSON' }); }
         return;
@@ -519,6 +576,7 @@ function createServer(): http.Server {
           if (s.profiles.find(p => p.id === activeProfileId)) {
             s.activeProfileId = activeProfileId;
             saveSettings(s);
+            resetAllAgents();
             jsonReply(res, 200, { ok: true });
           } else {
             jsonReply(res, 404, { error: 'Profile not found' });
@@ -528,13 +586,32 @@ function createServer(): http.Server {
       }
     }
 
+    // POST /api/profiles/:id/test — validate provider credentials
+    if (url.pathname.startsWith('/api/profiles/') && url.pathname.endsWith('/test') && req.method === 'POST') {
+      const id = url.pathname.split('/').filter(Boolean)[2] || '';
+      const profile = loadSettings().profiles.find(p => p.id === id);
+      if (!profile) { jsonReply(res, 404, { error: 'Profile not found' }); return; }
+      try {
+        await testProfileConnection(profile);
+        addLog('info', `Provider connection test passed: ${id}`);
+        jsonReply(res, 200, { ok: true });
+      } catch (err) {
+        addLog('warn', `Provider connection test failed: ${id}`);
+        jsonReply(res, 502, { error: (err as Error).message });
+      }
+      return;
+    }
+
     // DELETE /api/profiles/:id
     if (url.pathname.startsWith('/api/profiles/') && req.method === 'DELETE') {
       const id = url.pathname.split('/').pop() || '';
       const s = loadSettings();
+      const before = s.profiles.length;
       s.profiles = s.profiles.filter(p => p.id !== id);
+      if (s.profiles.length === before) { jsonReply(res, 404, { error: 'Profile not found' }); return; }
       if (s.activeProfileId === id) s.activeProfileId = s.profiles[0]?.id || '';
       saveSettings(s);
+      resetAllAgents();
       jsonReply(res, 200, { ok: true });
       return;
     }
@@ -772,18 +849,27 @@ function createServer(): http.Server {
 
         const memorySize = dirSize(MEMORY_DIR);
         const sessionsSize = dirSize(SESSIONS_DIR);
+        const skillsSize = dirSize(path.join(WORKSPACE_DIR, '.minis-skills'));
         const settingsSize = fs.existsSync(SETTINGS_FILE) ? fs.statSync(SETTINGS_FILE).size : 0;
         const soulSize = fs.existsSync(SOUL_FILE) ? fs.statSync(SOUL_FILE).size : 0;
+        const extensionsSize = ['.minis-skills.json', '.minis-mcp.json', LOGS_FILE].reduce((sum, filename) => {
+          const file = path.join(WORKSPACE_DIR, filename);
+          return sum + (fs.existsSync(file) ? fs.statSync(file).size : 0);
+        }, 0);
 
         jsonReply(res, 200, {
           sessions: store.sessions.length,
           messages: messageCount,
           memoryFiles: fs.existsSync(MEMORY_DIR) ? fs.readdirSync(MEMORY_DIR).filter(f => f.endsWith('.md')).length : 0,
+          skills: skillManager.list().length,
+          mcpServers: mcpManager.listConfigs().length,
           memorySize,
           sessionsSize,
+          skillsSize,
           settingsSize,
           soulSize,
-          totalSize: memorySize + sessionsSize + settingsSize + soulSize,
+          extensionsSize,
+          totalSize: memorySize + sessionsSize + skillsSize + settingsSize + soulSize + extensionsSize,
         });
       } catch (err) {
         jsonReply(res, 500, { error: (err as Error).message });
@@ -801,6 +887,7 @@ function createServer(): http.Server {
       }
       if (req.method === 'DELETE') {
         logBuffer.length = 0;
+        persistLogs();
         jsonReply(res, 200, { ok: true });
         return;
       }

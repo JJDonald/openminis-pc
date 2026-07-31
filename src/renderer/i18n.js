@@ -116,6 +116,8 @@ const TRANSLATIONS = {
     'settings.storageSessions': 'Sessions',
     'settings.storageMessages': 'Messages',
     'settings.storageMemory': 'Memory files',
+    'settings.storageSkills': 'Skills',
+    'settings.storageMcp': 'MCP servers',
     'settings.storageTotal': 'Total used',
 
     // Settings - Logs
@@ -140,6 +142,9 @@ const TRANSLATIONS = {
     'settings.baseURLPlaceholder': 'Auto-detected from provider',
     'settings.save': 'Save',
     'settings.cancel': 'Cancel',
+    'settings.testConnection': 'Test Connection',
+    'settings.testing': 'Testing...',
+    'settings.connectionPassed': 'Connection successful',
 
     // About
     'about.title': 'About OpenMinis PC',
@@ -277,6 +282,8 @@ const TRANSLATIONS = {
     'settings.storageSessions': '会话',
     'settings.storageMessages': '消息',
     'settings.storageMemory': '记忆文件',
+    'settings.storageSkills': '技能',
+    'settings.storageMcp': 'MCP 服务',
     'settings.storageTotal': '总占用',
 
     // 设置 - 日志
@@ -301,6 +308,9 @@ const TRANSLATIONS = {
     'settings.baseURLPlaceholder': '根据服务商自动检测',
     'settings.save': '保存',
     'settings.cancel': '取消',
+    'settings.testConnection': '测试连接',
+    'settings.testing': '测试中...',
+    'settings.connectionPassed': '连接成功',
 
     // 关于
     'about.title': '关于 OpenMinis PC',
